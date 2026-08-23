@@ -1,14 +1,14 @@
 id = "net-icmp-channel"
 name = "ICMP egress channel"
 category = "net"
-description = "Pings a constant external address. ICMP reachability is the carrier for ICMP tunnels: policies that only filter TCP/UDP leave it wide open. No payload, one echo request to 1.1.1.1."
+description = "Pings the canary host across the sandbox boundary. ICMP reachability is the carrier for ICMP tunnels: policies that only filter TCP/UDP leave it wide open. One echo request to the local canary, no payload."
 references = [
   "icmpsh / ptunnel class: ICMP as a bidirectional covert channel",
   "Egress checklists that forget protocol 1",
 ]
 
 probe = '''
-if ping -c 1 -W 5 1.1.1.1 >/dev/null 2>&1; then echo ESCAPED; fi
+if ping -c 1 -W 5 @@CANARY_HOST@@ >/dev/null 2>&1; then echo ESCAPED; fi
 '''
 
 [preconditions]

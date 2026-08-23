@@ -273,9 +273,10 @@ technique (`CONTRIBUTING.md`).
 ## Safety model (non-negotiable)
 
 - Almost every probe targets only the local canary and the decoy files the tool
-  plants. The one documented exception is the egress corpus (DNS, ICMP, QUIC), which
-  makes **constant, data-free reachability probes** to public resolvers (`example.com`
-  lookups via 8.8.8.8 / 9.9.9.9; a bare TCP connect to a DoT port; one ICMP echo).
+  plants. The one documented exception is the external egress corpus (DNS, QUIC),
+  which makes **constant, data-free reachability probes** to public resolvers
+  (`example.com` lookups via 8.8.8.8 / 9.9.9.9; a bare TCP connect to a DoT port).
+  The ICMP channel targets the canary host itself, like every other probe.
 - No real exfiltration, ever. Nothing about your system, and no secret, leaves the
   machine — the external probes above are reachability checks, never data.
 - Run it only on systems you own or are authorized to test (`RESPONSIBLE_USE.md`).
