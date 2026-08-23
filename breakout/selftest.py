@@ -125,8 +125,12 @@ def run(out_dir="reports/selftest", timeout=20):
         return False
     decoy_host = runner.DECOY_HOST_DIR
     profiles = _profiles(decoy_host)
+    # baseline pinned to docker: ground truth is calibrated for a root-in-alpine
+    # baseline. A host baseline drifts by environment (non-root CI user skips
+    # mknod//dev//etc probes; a Linux host makes keyring/pid1/rebinding fire),
+    # so the harness would measure the host, not the tool.
     report = runner.run(profiles, techs, tech_ids=ids, out_dir=out_dir,
-                        timeout=timeout)
+                        timeout=timeout, baseline_mode="docker")
 
     total = hits = 0
     wrong = []

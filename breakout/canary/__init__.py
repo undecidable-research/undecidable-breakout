@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -69,7 +70,17 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
-class _V6Server(ThreadingHTTPServer):
+class _Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        # probes routinely hang up mid-response: a broken pipe is the client
+        # leaving, not a canary fault — never dump a traceback for it
+        if not isinstance(sys.exc_info()[1], ConnectionError):
+            super().handle_error(request, client_address)
+
+
+class _V6Server(_Server):
     address_family = socket.AF_INET6
     allow_reuse_address = True
 
@@ -88,7 +99,7 @@ class Canary:
         self._rebind_seen = {}       # qname -> times queried (TTL-flip counter)
         self.abstract_name = abstract_name
         h = type("H", (_Handler,), {"canary": self})
-        self.httpd = ThreadingHTTPServer(("0.0.0.0", 0), h)
+        self.httpd = _Server(("0.0.0.0", 0), h)
         self.httpd.daemon_threads = True
         self.port = self.httpd.server_address[1]
         self.v6_ok = False
