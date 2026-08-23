@@ -1,0 +1,20 @@
+id = "fs-proc-pid1-cmdline"
+name = "Host init visible via /proc/1/cmdline"
+category = "fs"
+description = "Reads /proc/1/cmdline. Inside a PID namespace PID 1 is the container init (tiny, generic); with the namespace shared it is the host's init or the container runtime. Distinguishes 'pid isolated' from 'pid shared' in one read."
+references = [
+  "Container detection and breakout reconnaissance via /proc/1",
+  "docker --pid host as a documented weakening",
+]
+
+probe = '''
+c=$(tr '\\0' ' ' < /proc/1/cmdline 2>/dev/null)
+[ -n "$c" ] || exit 0
+case "$c" in
+  *systemd*|*sbin/init*|*containerd*|*dockerd*|*/wslinit*) echo ESCAPED ;;
+esac
+'''
+
+[preconditions]
+oracle = "stdout"
+

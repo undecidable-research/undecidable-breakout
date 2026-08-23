@@ -1,0 +1,17 @@
+id = "ipc-docker-sock"
+name = "Docker socket reachable inside the boundary"
+category = "ipc"
+description = "Checks whether the Docker control socket (/var/run/docker.sock) is present inside the sandbox. A mounted docker socket is the canonical container escape: anything that can talk to it can start a new privileged container bind-mounting the host root and own the machine. Presence is the finding; the socket is never spoken to, nothing is created. There is no baseline — the socket is exposed by configuration or it is not, so this technique is judged directly per profile."
+references = [
+  "Docker socket mounts as full-host escape (well-documented, e.g. Trail of Bits, container escape literature)",
+  "CIS Docker Benchmark 5.31: do not mount the Docker socket inside containers",
+]
+
+skip_baseline = true
+
+probe = '''
+if [ -S /var/run/docker.sock ] || [ -S /run/docker.sock ]; then echo ESCAPED; fi
+'''
+
+[preconditions]
+oracle = "stdout"

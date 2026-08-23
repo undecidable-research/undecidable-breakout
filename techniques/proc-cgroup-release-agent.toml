@@ -1,0 +1,15 @@
+id = "proc-cgroup-release-agent"
+name = "cgroup release_agent writable"
+category = "proc"
+description = "Checks whether /sys/fs/cgroup/release_agent is writable. The classic container escape: write a path, trigger cgroup release, kernel executes it on the host. Read-only check: nothing is written."
+references = [
+  "CVE-2019-5736-adjacent release_agent escape (ticket to root on privileged containers)",
+  "Modern cgroup v2 hides release_agent; finding it writable is an immediate red",
+]
+
+probe = '''
+[ -w /sys/fs/cgroup/release_agent ] && echo ESCAPED
+'''
+
+[preconditions]
+oracle = "stdout"

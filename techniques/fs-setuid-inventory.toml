@@ -1,0 +1,16 @@
+id = "fs-setuid-inventory"
+name = "Setuid binary inventory available"
+category = "fs"
+description = "Counts setuid-root binaries reachable inside the boundary. Each one is a privilege-escalation candidate for a contained payload (sudo, mount, su...); a hardened image keeps the count near zero. Presence is the finding; nothing is executed."
+references = [
+  "GTFOBins: the setuid surface as an escape toolbox",
+]
+
+probe = '''
+n=$(find / -xdev -perm -4000 -type f 2>/dev/null | wc -l)
+[ "$n" -gt 0 ] && echo ESCAPED
+'''
+
+[preconditions]
+oracle = "stdout"
+

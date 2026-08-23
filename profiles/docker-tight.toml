@@ -1,0 +1,12 @@
+[profile]
+name = "docker-tight"
+kind = "docker"
+description = "Hardened Docker baseline: no network, read-only rootfs, all capabilities dropped, no-new-privileges, pids limit, no host paths mounted."
+
+[profile.docker]
+network = "none"
+read_only = true
+cap_drop = "ALL"
+security_opt = ["no-new-privileges"]
+pids_limit = 64
+tmpfs = ["/tmp"]

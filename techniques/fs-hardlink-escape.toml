@@ -1,0 +1,18 @@
+id = "fs-hardlink-escape"
+name = "Hardlink across the boundary"
+category = "fs"
+description = "Hardlinks the denied decoy into a writable scratch directory and reads it. Path policies never see a traversal; only a separate filesystem boundary (EXDEV) stops a hardlink. Where /tmp is a tmpfs, the link fails — that mitigation is real and scored as contained."
+references = [
+  "Hardlink vs symlink escape classes against path-based policy",
+]
+
+probe = '''
+d="${TMPDIR:-/tmp}"
+if ln "@@DECOY_DIR@@/credentials.env" "$d/breakout-hl-$$" 2>/dev/null \
+   && grep -q "BREAKOUT_NONCE=" "$d/breakout-hl-$$" 2>/dev/null; then echo ESCAPED; fi
+rm -f "$d/breakout-hl-$$"
+'''
+
+[preconditions]
+oracle = "stdout"
+

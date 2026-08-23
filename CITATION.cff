@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If this software helps your work, please cite it."
+title: "Undecidable-Breakout"
+authors:
+  - family-names: "Bambini"
+    given-names: "Edoardo"
+version: 0.3.0
+date-released: "2026-08-22"
+license: MIT
+repository-code: "https://github.com/undecidable-research/undecidable-breakout"
+abstract: >-
+  A conformance suite that tests whether a sandbox actually holds: it runs a fixed,
+  deterministic corpus of documented escape techniques inside a containment
+  configuration and reports, per technique, whether it ESCAPED, was CONTAINED, or was
+  SKIPPED as not applicable. It never proves a sandbox safe; it proves, reproducibly,
+  when it is not.
+keywords:
+  - security
+  - sandbox
+  - conformance
+  - egress-control
+  - container-escape

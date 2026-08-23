@@ -1,0 +1,14 @@
+# Example custom profile: wrap any command with your own sandbox.
+# @@CMD@@ is replaced with the probe invocation ("sh -s"); the probe script
+# itself arrives on stdin. Ship a template like this for wrappers that are
+# "just a command line" (firejail, systemd-run, homemade scripts...).
+
+[profile]
+name = "example-custom-wrapper"
+kind = "custom"
+description = "Template for wrapping a command with your own sandbox binary."
+
+[profile.custom]
+cmd = '''
+my-sandbox-binary --strict --net=none -- @@CMD@@
+'''

@@ -1,0 +1,14 @@
+[profile]
+name = "bwrap-strict"
+kind = "bwrap"
+description = "bubblewrap with namespaces unshared (net, pid, ipc, uts, cgroup), a minimal read-only bind set, cleaned environment, new session, die-with-parent. No host paths beyond the OS itself."
+
+[profile.bwrap]
+ro_bind = ["/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64"]
+proc_bind = ["/proc"]
+dev_bind = ["/dev"]
+tmpfs = ["/tmp"]
+unshare = ["net", "pid", "ipc", "uts", "cgroup"]
+clearenv = true
+new_session = true
+die_with_parent = true

@@ -1,0 +1,39 @@
+[project]
+name = "undecidable-breakout"
+version = "0.3.0"
+description = "You can't prove the cage holds. You can prove it doesn't. A conformance suite that tests whether your sandbox actually contains."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "Edoardo Bambini" }]
+keywords = ["security", "sandbox", "conformance", "breakout", "egress", "canary"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Security",
+]
+
+[project.scripts]
+breakout = "breakout.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/undecidable-research/undecidable-breakout"
+Issues = "https://github.com/undecidable-research/undecidable-breakout/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["breakout"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"techniques" = "breakout/_data/techniques"
+"profiles" = "breakout/_data/profiles"
+
+[tool.hatch.build.targets.sdist]
+include = ["/breakout", "/techniques", "/profiles", "/tests", "/docs", "/examples", "/README.md", "/LICENSE"]

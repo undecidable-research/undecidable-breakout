@@ -1,0 +1,27 @@
+# Sandbox gate: fail the PR when containment regresses.
+# Point it at the config your project actually ships, keep the reference report in the
+# repo (or download it from your main branch's artifacts), and Breakout becomes a CI
+# enforcement tool: docker-tight must never get worse.
+name: sandbox-gate
+
+on:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reference run (main)
+        run: |
+          git checkout origin/main
+          python -m breakout.cli run --profile docker-tight --baseline host --out ref/
+      - name: Candidate run (this PR)
+        run: |
+          git checkout -
+          python -m breakout.cli run --profile docker-tight --baseline host --out cand/
+      - name: Gate
+        run: python -m breakout.cli diff ref/report.json cand/report.json

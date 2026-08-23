@@ -1,0 +1,29 @@
+id = "net-quic-udp443"
+name = "QUIC / UDP 443 reachability"
+category = "net"
+description = "Sends a QUIC long-header datagram to a public QUIC endpoint (dns.google). A Version Negotiation packet coming back proves UDP/443 egress, the precondition for HTTP/3 and QUIC-based tunnels that port-443-only TCP filters never see."
+references = [
+  "RFC 9000 version negotiation: any long-header packet elicits a VN reply",
+  "QUIC as egress channel invisible to TCP-centric L7 inspection",
+]
+
+probe = '''
+python3 -c "
+import socket
+p = bytes([0x80, 0x00, 0x00, 0x00, 0x01]) + b'\\x00' * 1195
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(8)
+s.sendto(p, ('8.8.8.8', 443))
+try:
+    if s.recv(1500):
+        print('ESCAPED')
+except OSError:
+    pass
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+timeout = 30
+oracle = "stdout"
+

@@ -1,0 +1,18 @@
+[profile]
+name = "seatbelt-strict"
+kind = "custom"
+os = ["macos"]
+description = "macOS Seatbelt via the deprecated-but-unreplaced sandbox-exec: default deny, reads allowed except the home directory (decoys must be denied), writes only to /tmp, all network denied. ponytail: syntax-checked only, untested on a real Mac — sandbox-exec profiles are notoriously picky; adjust and PR your measured result."
+
+[profile.custom]
+cmd = '''
+sandbox-exec -p '
+  (version 1)
+  (deny default)
+  (allow process*)
+  (allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/System"))
+  (deny file-read* (subpath (home)))
+  (allow file-write* (subpath "/tmp"))
+  (deny network*)
+' @@CMD@@
+'''

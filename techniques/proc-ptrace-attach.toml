@@ -1,0 +1,23 @@
+id = "proc-ptrace-attach"
+name = "ptrace attach across the boundary"
+category = "proc"
+description = "Attaches strace to a sibling process. If ptrace works, code inside the sandbox can inspect and inject into every process it can signal — credentials, keystrokes, anything. Yama ptrace_scope or CAP_SYS_PTRACE removal must block it."
+references = [
+  "kernel.yama.ptrace_scope as containment aid",
+  "Containers must not run with CAP_SYS_PTRACE",
+]
+
+probe = '''
+sh -c 'sleep 5' & p=$!
+sleep 1
+timeout 3 strace -p "$p" -e trace=none -o /dev/null 2>/dev/null
+rc=$?
+kill "$p" 2>/dev/null
+[ "$rc" -eq 124 ] && echo ESCAPED
+'''
+
+[preconditions]
+bins = ["strace", "timeout"]
+timeout = 30
+oracle = "stdout"
+

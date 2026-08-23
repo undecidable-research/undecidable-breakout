@@ -1,0 +1,15 @@
+id = "fs-symlink-escape"
+name = "Symlink across the boundary"
+category = "fs"
+description = "Creates a symlink in a writable location pointing at the denied decoy path and reads through it. Policies that allow writes inside a scratch dir but resolve symlinks outside their checked prefix do not contain this."
+references = ["TOCTOU/symlink escapes against path-based policy, classic and current"]
+
+probe = '''
+d="${TMPDIR:-/tmp}"
+if ln -sf "@@DECOY_DIR@@/credentials.env" "$d/breakout-$$" 2>/dev/null \
+   && grep -q "BREAKOUT_NONCE=" "$d/breakout-$$" 2>/dev/null; then echo ESCAPED; fi
+rm -f "$d/breakout-$$"
+'''
+
+[preconditions]
+oracle = "stdout"

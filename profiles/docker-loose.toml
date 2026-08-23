@@ -1,0 +1,8 @@
+[profile]
+name = "docker-loose"
+kind = "docker"
+description = "Docker as it often ships in dev: bridge network, all capabilities, and the host decoy directory mounted read-only. Expect net and fs techniques to escape."
+
+[profile.docker]
+network = "bridge"
+mounts = [["~/.breakout-decoy", "/breakout-decoy", "ro"]]

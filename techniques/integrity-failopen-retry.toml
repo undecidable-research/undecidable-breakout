@@ -1,0 +1,17 @@
+id = "integrity-failopen-retry"
+name = "Wrapper fails open and retries unsandboxed"
+category = "integrity"
+description = "Models the sandbox-failed-so-run-plainly pattern: when the wrapper is unavailable, the command is re-executed without containment and the only trace is a log line. The profile 'failopen-wrapper' reproduces it; well-behaved sandboxes show no such marker."
+references = [
+  "Claude Code retry with dangerouslyDisableSandbox enabled by default (allowUnsandboxedCommands)",
+  "Fail-open containment: the quietest class of non-containment",
+]
+
+skip_baseline = true
+
+probe = '''
+echo breakout-probe-started
+'''
+
+[preconditions]
+oracle = "stdout"

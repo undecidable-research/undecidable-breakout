@@ -1,0 +1,21 @@
+id = "net-dns-nonstandard-port"
+name = "Egress on a nonstandard DNS port"
+category = "net"
+description = "Opens a TCP connection to a public resolver on port 853 (DNS-over-TLS), not 53. Egress rules written as 'allow outbound 53, block the rest' fall to any resolver reachable on another port; DNS is a protocol, not a port number. The connection is opened and closed — the reachability is the finding, no query is sent."
+references = [
+  "RFC 7858: DNS over TLS on port 853",
+  "CVE-2026-32946 class: DoT/nonstandard-port egress bypass, generalized",
+]
+
+probe = '''
+python3 -c "
+import socket
+socket.create_connection(('8.8.8.8', 853), timeout=8).close()   # DoT port, not 53
+print('ESCAPED')
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+timeout = 30
+oracle = "stdout"

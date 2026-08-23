@@ -1,0 +1,17 @@
+id = "net-redirect-follow"
+name = "Egress via redirect following"
+category = "net"
+description = "Asks the canary for a 302 pointing anywhere; the HTTP client follows it. Egress filters that validate only the first hop URL are defeated by any open redirect on an allowed origin: the policy check happens once, the connection happens twice."
+references = [
+  "Open redirect as SSRF trampoline, standard bug-bounty class",
+  "Egress proxies that resolve policy on the initial request only",
+]
+
+probe = '''
+wget -q -O /dev/null "@@CANARY_URL@@/redirect/@@TECH_ID@@/@@NONCE@@"
+'''
+
+[preconditions]
+bins = ["wget"]
+oracle = "canary"
+

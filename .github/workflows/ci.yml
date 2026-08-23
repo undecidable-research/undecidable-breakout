@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Self-check
+        run: python -m breakout.cli verify
+      - name: Accuracy harness (every verdict must match ground truth)
+        run: python -m breakout.cli selftest --out reports/selftest
+      - name: Demo run (loose vs tight)
+        run: |
+          python -m breakout.cli run --profile docker-loose --profile docker-tight \
+            --profile none --baseline host --out reports/
+          python -m breakout.cli score reports/report.json
+      - name: Stability gate (same config twice must not differ)
+        run: |
+          cp reports/report.json reports/first.json
+          python -m breakout.cli run --profile docker-tight --baseline host --out reports/second/
+          python -m breakout.cli diff reports/first.json reports/second/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: breakout-reports
+          path: reports/

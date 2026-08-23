@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+reports/
+*.egg-info/
+.uv/
+
+# internal / sensitive — kept locally, never published
+DECISION_MEMO.md
+AGENTS.md
+opencode.json

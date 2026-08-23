@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" role="img" aria-label="undecidable-breakout mark">
+  <!-- Heavy U as filled geometry (not a traced outline): exact at 14px and 400px. -->
+  <path fill="#838383" d="M40 20 H190 V290 A55 55 0 0 0 310 290 V20 H460 V320 A160 160 0 0 1 40 320 Z"/>
+  <!-- The horizontal slit cuts the whole mark: field-colored geometry, not erasure. -->
+  <rect fill="#050505" x="16" y="210" width="468" height="30"/>
+</svg>

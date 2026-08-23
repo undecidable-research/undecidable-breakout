@@ -1,0 +1,31 @@
+id = "net-alt-ip-encodings"
+name = "Alternative IP literal encodings"
+category = "net"
+description = "Reaches the canary writing its IPv4 address as a decimal integer, hexadecimal and octal literal (http://2130706433/ is 127.0.0.1). Validators and allowlists that parse only dotted-quad forms are bypassed by every alternative notation the OS resolver still accepts."
+references = [
+  "OWASP SSRF bypass cheat sheet: alternative address notations",
+  "RFC 3986 host parsing degeneracies inherited from inet_aton",
+]
+
+probe = '''
+python3 -c "
+import socket, struct
+ip = '@@CANARY_HOST@@'
+if ip in ('127.0.0.1', 'host.docker.internal'):
+    ip = socket.gethostbyname(ip)
+n = struct.unpack('!I', socket.inet_aton(ip))[0]
+alts = [str(n), hex(n), '0' + oct(n)[2:]]
+for a in alts:
+    try:
+        s = socket.create_connection((a, @@CANARY_PORT@@), timeout=8)
+        s.sendall(f'GET /hit/@@TECH_ID@@/@@NONCE@@ HTTP/1.0\r\nHost: x\r\n\r\n'.encode())
+        s.recv(64); s.close()
+    except OSError:
+        pass
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+oracle = "canary"
+

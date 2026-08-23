@@ -1,0 +1,15 @@
+id = "net-ipv6-fallback"
+name = "IPv6 fallback egress"
+category = "net"
+description = "Many egress policies and local canaries cover IPv4 only. The probe reaches the canary over its IPv6 listener on ::1."
+references = ["Recurring gap in allowlist enforcement and monitoring"]
+
+probe = '''
+url="http://[::1]:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null "$url"
+else wget -q -O /dev/null "$url"; fi
+'''
+
+[preconditions]
+canary = "ipv6"
+oracle = "canary"

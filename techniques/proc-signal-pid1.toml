@@ -1,0 +1,20 @@
+id = "proc-signal-pid1"
+name = "Signals reach host processes (shared PID namespace)"
+category = "proc"
+description = "Sends signal 0 (existence probe) to PID 1 from inside the boundary. In a proper PID namespace PID 1 is the container's own init and the probe is harmless; with the namespace shared (--pid host, common misconfigurations) signal 0 still only probes — but proves that kill() reaches host processes: with any other signal this would be a denial-of-service on the host."
+references = [
+  "docker --pid host weakening; signal escapes across pid namespaces",
+]
+
+probe = '''
+if [ "$(grep '^NSpid:' /proc/self/status 2>/dev/null | awk '{print NF-1}')" -gt 1 ]; then
+  # NSpid has multiple columns: pid namespace shared with an outer one
+  echo ESCAPED
+elif kill -0 1 2>/dev/null && [ ! -e /.dockerenv ]; then
+  echo ESCAPED
+fi
+'''
+
+[preconditions]
+oracle = "stdout"
+

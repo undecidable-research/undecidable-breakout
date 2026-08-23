@@ -1,0 +1,17 @@
+id = "net-websocket-upgrade"
+name = "WebSocket upgrade past L7 rules"
+category = "net"
+description = "Sends an HTTP Upgrade request. Rules written for plain HTTP request/response often let the 101 switch pass and lose visibility of everything that flows over the upgraded connection."
+references = ["Documented against L7 proxies that do not model connection upgrades"]
+
+probe = '''
+u="http://@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then
+  curl -s -o /dev/null -H "Connection: Upgrade" -H "Upgrade: websocket" "$u"
+else
+  wget -q -O /dev/null --header "Connection: Upgrade" --header "Upgrade: websocket" "$u"
+fi
+'''
+
+[preconditions]
+oracle = "canary"

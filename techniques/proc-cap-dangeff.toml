@@ -1,0 +1,20 @@
+id = "proc-cap-dangeff"
+name = "Dangerous capabilities retained (CapEff)"
+category = "proc"
+description = "Decodes CapEff from /proc/self/status and checks for CAP_SYS_PTRACE, CAP_SYS_ADMIN and CAP_MKNOD. Any of them surviving inside the sandbox is a documented escape primitive, not a style issue."
+references = [
+  "capabilities(7): the three most abused caps in container escapes",
+]
+
+probe = '''
+cap=$(grep '^CapEff:' /proc/self/status 2>/dev/null | awk '{print $2}')
+[ -n "$cap" ] || exit 0
+v=$(( 0x$cap ))
+[ $(( v & (1 << 19) )) -ne 0 ] && echo ESCAPED   # SYS_PTRACE
+[ $(( v & (1 << 21) )) -ne 0 ] && echo ESCAPED   # SYS_ADMIN
+[ $(( v & (1 << 27) )) -ne 0 ] && echo ESCAPED   # MKNOD
+'''
+
+[preconditions]
+oracle = "stdout"
+

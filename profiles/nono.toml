@@ -1,0 +1,8 @@
+[profile]
+name = "nono"
+kind = "custom"
+requires = ["nono"]
+description = "nono (untrusted-code sandbox for agents and notebooks) wrapping every probe. Adjust the flags to the policy you actually ship."
+
+[profile.custom]
+cmd = "nono -- @@CMD@@"

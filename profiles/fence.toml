@@ -1,0 +1,8 @@
+[profile]
+name = "fence"
+kind = "custom"
+requires = ["fence"]
+description = "fence (agent sandbox) wrapping every probe. Adjust the flags to the policy you actually ship."
+
+[profile.custom]
+cmd = "fence run -- @@CMD@@"

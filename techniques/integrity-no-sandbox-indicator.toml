@@ -1,0 +1,19 @@
+id = "integrity-no-sandbox-indicator"
+name = "No sandbox indicator present"
+category = "integrity"
+description = "Detects running entirely unsandboxed: no /.dockerenv, and the device of / equals the device of PID 1's root (same mount namespace). If a wrapper is believed to be active but the probe sees this, commands are silently running on the host."
+references = [
+  "Claude Code sandbox fail-open behaviour: warns and continues unsandboxed unless failIfUnavailable",
+  "Configurations fail open, not with an error",
+]
+
+probe = '''
+if [ -e /.dockerenv ]; then exit 0; fi
+a=$(stat -c %d / 2>/dev/null)
+b=$(stat -c %d /proc/1/root 2>/dev/null)
+if [ -n "$a" ] && [ -n "$b" ] && [ "$a" != "$b" ]; then exit 0; fi
+echo ESCAPED
+'''
+
+[preconditions]
+oracle = "stdout"

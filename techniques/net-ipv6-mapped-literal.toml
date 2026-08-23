@@ -1,0 +1,19 @@
+id = "net-ipv6-mapped-literal"
+name = "IPv4-mapped IPv6 literal address"
+category = "net"
+description = "Reaches a local service through the IPv4-mapped IPv6 form [::ffff:127.0.0.1]. Filters that normalize IPv4 literals but not mapped forms let the connection through to the same listener. Applies where the canary has an IPv6 listener."
+references = [
+  "Address-form canonicalization gaps in allowlist enforcement",
+  "RFC 4291 IPv4-mapped addresses resolve to the same listener",
+]
+
+probe = '''
+url="http://[::ffff:127.0.0.1]:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null "$url"
+else wget -q -O /dev/null "$url"; fi
+'''
+
+[preconditions]
+canary = "ipv6"
+oracle = "canary"
+

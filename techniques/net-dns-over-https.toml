@@ -1,0 +1,17 @@
+id = "net-dns-over-https"
+name = "DNS over HTTPS egress"
+category = "net"
+description = "Resolves a fixed, well-known name through an encrypted DoH endpoint. Egress filters that only inspect cleartext port-53 DNS never see the query. Same class as CVE-2026-32947 against Harden-Runner. No user data leaves: the query is a constant lookup of example.com."
+references = [
+  "CVE-2026-32947: Harden-Runner DNS over HTTPS bypass (2026-03-18)",
+  "CVE-2026-32946: Harden-Runner DNS over TCP bypass",
+]
+
+probe = '''
+if wget -q -O - "https://dns.google/resolve?name=example.com&type=A" 2>/dev/null \
+   | grep -q '"Status"[[:space:]]*:[[:space:]]*0'; then echo ESCAPED; fi
+'''
+
+[preconditions]
+bins = ["wget"]
+oracle = "stdout"

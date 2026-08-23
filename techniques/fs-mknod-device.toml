@@ -1,0 +1,17 @@
+id = "fs-mknod-device"
+name = "Device node creation (CAP_MKNOD)"
+category = "fs"
+description = "Attempts mknod for a character device in /tmp. Creating device nodes is the gateway to /dev/mem, raw disks and kernel interfaces; a contained environment must drop CAP_MKNOD or the operation must fail."
+references = [
+  "Default Docker capabilities include CAP_MKNOD — a known hardening gap",
+  "Device-node escapes in privileged containers",
+]
+
+probe = '''
+if mknod "${TMPDIR:-/tmp}/breakout-node-$$" c 1 3 2>/dev/null; then echo ESCAPED; fi
+rm -f "${TMPDIR:-/tmp}/breakout-node-$$"
+'''
+
+[preconditions]
+oracle = "stdout"
+

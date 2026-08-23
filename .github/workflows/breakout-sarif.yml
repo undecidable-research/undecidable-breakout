@@ -1,0 +1,31 @@
+# Runs Breakout against the tight profile and surfaces ESCAPED techniques as
+# SARIF annotations on the PR. Complements sandbox-gate.yml: the gate fails on
+# regressions, this one shows the findings inline.
+name: breakout-sarif
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sarif:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run breakout (docker-tight)
+        run: python -m breakout.cli run --profile docker-tight --baseline host --out reports/
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: reports/report.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: breakout-sarif-report
+          path: reports/

@@ -1,0 +1,29 @@
+{
+  "disclaimer": "A high score does not mean safe. It means that, against this corpus, in this configuration, on this kernel, those techniques did not get out. The rest remains undecidable.",
+  "rows": [
+    {
+      "profile": "docker-tight",
+      "date": "2026-08-22T18:04:44+0200",
+      "host": "windows 11",
+      "corpus_version": "0.3.0",
+      "overall": 88,
+      "net": 100,
+      "fs": 71,
+      "proc": 50,
+      "ipc": 100,
+      "integrity": 100
+    },
+    {
+      "profile": "docker-loose",
+      "date": "2026-08-22T18:04:44+0200",
+      "host": "windows 11",
+      "corpus_version": "0.3.0",
+      "overall": 8,
+      "net": 0,
+      "fs": 0,
+      "proc": 0,
+      "ipc": 50,
+      "integrity": 100
+    }
+  ]
+}

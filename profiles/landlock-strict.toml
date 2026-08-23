@@ -1,0 +1,4 @@
+[profile]
+name = "landlock-strict"
+kind = "landlock"
+description = "Landlock LSM via the bundled helper (compiled on demand with cc): filesystem restricted to read-only system dirs + writable /tmp, /dev, /var/tmp; home unreachable. TCP bind/connect also denied on kernels >= 6.7 (ABI 4); on older kernels network is unrestricted — the documented Landlock gap, measured honestly. Requires Linux + cc."

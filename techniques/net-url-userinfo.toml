@@ -1,0 +1,18 @@
+id = "net-url-userinfo"
+name = "URL parser differential via userinfo prefix"
+category = "net"
+description = "Requests http://trusted.example@<canary>/... Naive validators that check the URL prefix or parse the authority loosely see 'trusted.example' as the host; the HTTP client discards it as userinfo and connects to the canary. The classic SSRF/open-redirect parser differential, applied to egress allowlists."
+references = [
+  "OWASP SSRF bypass patterns: userinfo (@) authority confusion",
+  "Whatwg URL vs ad-hoc parsing differentials",
+]
+
+probe = '''
+u="http://trusted-allowlisted.example@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null "$u"
+else wget -q -O /dev/null "$u"; fi
+'''
+
+[preconditions]
+oracle = "canary"
+

@@ -1,0 +1,14 @@
+[profile]
+name = "failopen-wrapper"
+kind = "custom"
+description = "Reproduces the fail-open wrapper: if the sandbox engine is missing, log a line and run the command unsandboxed. The integrity-failopen-retry technique flags it; real sandboxes stay quiet and contained."
+
+[profile.custom]
+cmd = '''
+if command -v breakout-sandboxd >/dev/null 2>&1; then
+  breakout-sandboxd @@CMD@@
+else
+  echo "ESCAPED (breakout: wrapper unavailable, continuing unsandboxed)" >&2
+  @@CMD@@
+fi
+'''

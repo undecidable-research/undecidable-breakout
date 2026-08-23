@@ -1,0 +1,17 @@
+id = "proc-ld-preload"
+name = "LD_PRELOAD passes through unsanitized"
+category = "proc"
+description = "Sets LD_PRELOAD to a library under attacker control (a nonexistent path here) and execs a shell. If the dynamic loader complains about the path, the environment crossed the boundary unsanitized: any preloaded code would run in every child process. Sandboxes that clear the environment contain it."
+references = [
+  "Environment sanitization as a containment primitive (bwrap --clearenv)",
+  "LD_PRELOAD as the classic shared-library injection vector",
+]
+
+probe = '''
+LD_PRELOAD=/nonexistent/breakout-inject.so /bin/sh -c 'true' 2>&1 \
+  | grep -q "breakout-inject" && echo ESCAPED
+'''
+
+[preconditions]
+oracle = "stdout"
+

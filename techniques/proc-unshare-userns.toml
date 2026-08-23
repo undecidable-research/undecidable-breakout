@@ -1,0 +1,18 @@
+id = "proc-unshare-userns"
+name = "User namespace available (unshare -Ur)"
+category = "proc"
+description = "Creates a new user namespace mapping root. If it succeeds, code inside the sandbox gains apparent root and access to kernel interfaces gated on capabilities (mount, network admin), the documented first step of many container escapes. Hardened configurations disable unprivileged userns or seccomp-block the syscall."
+references = [
+  "kernel.unprivileged_userns_clone as a hardening switch",
+  "User-namespace-facilitated container escapes (multiple CVEs)",
+]
+
+probe = '''
+if unshare -Ur /bin/sh -c 'id -u | grep -q 0 && echo ESCAPED' 2>/dev/null \
+   | grep -q ESCAPED; then echo ESCAPED; fi
+'''
+
+[preconditions]
+bins = ["unshare"]
+oracle = "stdout"
+

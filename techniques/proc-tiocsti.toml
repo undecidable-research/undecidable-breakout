@@ -1,0 +1,25 @@
+id = "proc-tiocsti"
+name = "TIOCSTI terminal input injection"
+category = "proc"
+description = "Injects a keystroke into the controlling terminal with the TIOCSTI ioctl. Input typed this way executes in the shell *outside* the sandbox with the user's privileges. Kernel 6.2 defaults it off; older kernels need sysctl protection. Requires a real tty, so it is SKIPPED in tty-less CI."
+references = [
+  "TIOCSTI escapes from sandboxes to the parent terminal",
+  "kernel dev.tty.legacy_tiocsti hardening",
+]
+
+probe = '''
+[ -t 0 ] || exit 0
+python3 -c "
+import fcntl, termios
+try:
+    fcntl.ioctl(0, termios.TIOCSTI, 'X')
+    print('ESCAPED')
+except OSError:
+    pass
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+oracle = "stdout"
+

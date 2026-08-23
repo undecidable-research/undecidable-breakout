@@ -1,0 +1,21 @@
+id = "net-arbitrary-resolver"
+name = "DNS to an arbitrary external resolver"
+category = "net"
+description = "Queries a public resolver (9.9.9.9) directly instead of the configured one. Policies that pin egress by controlling /etc/resolv.conf or the local resolver are bypassed: the DNS channel leaves via any reachable resolver IP."
+references = [
+  "Resolver pinning as an (insufficient) egress control",
+  "Direct-to-resolver queries as documented exfiltration route",
+]
+
+probe = '''
+if command -v dig >/dev/null 2>&1; then
+  dig +short +time=8 example.com @9.9.9.9 2>/dev/null | grep -q . && echo ESCAPED
+else
+  nslookup example.com 9.9.9.9 2>/dev/null | grep -q "^Name:" && echo ESCAPED
+fi
+'''
+
+[preconditions]
+timeout = 30
+oracle = "stdout"
+

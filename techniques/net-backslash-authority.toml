@@ -1,0 +1,24 @@
+id = "net-backslash-authority"
+name = "Backslash authority confusion"
+category = "net"
+description = "Requests http://allowed.example\\@canary:port/. WHATWG-compliant clients treat the backslash as a separator and route to the canary; naive validators that split on '/' only see the allowlisted host in the authority. Parser differential at the URL grammar level."
+references = [
+  "WHATWG URL spec: backslash treated as slash in special schemes",
+  "SSRF filter bypasses via authority confusion (2023-2026 class)",
+]
+
+probe = '''
+python3 -c "
+import http.client
+c = http.client.HTTPConnection('@@CANARY_HOST@@', @@CANARY_PORT@@, timeout=8)
+c.request('GET', 'http://allowed.example\\\\@'+ '@@CANARY_HOST@@' +':@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@',
+          headers={'Host': 'allowed.example'})
+c.close()
+print('sent')
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+oracle = "canary"
+

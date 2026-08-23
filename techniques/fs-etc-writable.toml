@@ -1,0 +1,16 @@
+id = "fs-etc-writable"
+name = "Writable /etc"
+category = "fs"
+description = "Attempts a write inside /etc. A writable /etc means configuration hijacking (resolv.conf poisoning, hosts rewriting, ld.so.preload persistence) is available to anything already inside the boundary — turning a contained process into a persistent one."
+references = [
+  "ld.so.preload and resolv.conf as persistence primitives",
+]
+
+probe = '''
+f="/etc/breakout-$$"
+if echo breakout > "$f" 2>/dev/null; then echo ESCAPED; rm -f "$f"; fi
+'''
+
+[preconditions]
+oracle = "stdout"
+

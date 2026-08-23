@@ -1,0 +1,49 @@
+# Measures every measurable profile on a pinned Linux runner and commits the
+# updated leaderboard. The leaderboard's whole value is that these rows are
+# reproducible: same corpus, same kernel, same profiles, date-stamped.
+name: leaderboard
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1" # weekly refresh against the growing corpus
+
+permissions:
+  contents: write
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install sandbox tools
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap strace
+      - name: Run the corpus against every measurable profile
+        run: |
+          python -m breakout.cli run \
+            --profile none \
+            --profile docker-loose --profile docker-tight \
+            --profile bwrap-loose --profile bwrap-strict \
+            --profile landlock-strict \
+            --profile failopen-wrapper \
+            --baseline host --out reports/measured/
+      - name: Build leaderboard
+        run: |
+          python -m breakout.cli leaderboard reports/measured/report.json \
+            --out docs/leaderboard/index.html
+      - name: Commit updated leaderboard
+        run: |
+          git config user.name "breakout-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/leaderboard/
+          git diff --cached --quiet || (git commit -m "leaderboard: refresh from CI measurement" && git push)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: leaderboard-reports
+          path: reports/measured/

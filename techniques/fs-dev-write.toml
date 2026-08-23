@@ -1,0 +1,13 @@
+id = "fs-dev-write"
+name = "Writable /dev device directory"
+category = "fs"
+description = "Creates a node inside /dev. A contained environment should expose a read-only or minimal /dev; a writable one allows device mknod-adjacent tricks and debugfs-style abuse."
+references = ["CIS/container hardening baseline: /dev must not be writable"]
+
+probe = '''
+f="/dev/breakout-$$"
+if echo breakout > "$f" 2>/dev/null; then echo ESCAPED; rm -f "$f"; fi
+'''
+
+[preconditions]
+oracle = "stdout"

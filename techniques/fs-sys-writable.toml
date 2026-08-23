@@ -1,0 +1,16 @@
+id = "fs-sys-writable"
+name = "Writable /sys"
+category = "fs"
+description = "Attempts a write inside /sys. A contained environment must keep sysfs read-only: a writable /sys/fs/cgroup or /sys/kernel exposes release_agent-style escapes and kernel knob abuse."
+references = [
+  "Privileged-container guidance: sysfs must be ro",
+]
+
+probe = '''
+f="/sys/breakout-$$"
+if echo breakout > "$f" 2>/dev/null; then echo ESCAPED; rm -f "$f"; fi
+'''
+
+[preconditions]
+oracle = "stdout"
+

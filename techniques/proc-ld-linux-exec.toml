@@ -1,0 +1,18 @@
+id = "proc-ld-linux-exec"
+name = "Execute via the ELF loader, not execve"
+category = "proc"
+description = "Invokes the dynamic loader directly on /bin/sh. Filters that block execution of a binary by intercepting execve on its path do not fire when the loader maps and jumps into it. Documented by Ona against Claude Code invoking blocked binaries via ld-linux."
+references = [
+  "Ona: blocked binary loaded by invoking ld-linux directly (2026)",
+  "Path-based exec filters vs loader-mediated execution",
+]
+
+probe = '''
+for ld in /lib/ld-musl-*so* /lib64/ld-linux-*so* /lib/ld-linux-*so* /lib/*/ld-*so*; do
+  [ -e "$ld" ] || continue
+  if "$ld" /bin/sh -c 'echo ESCAPED' 2>/dev/null | grep -q ESCAPED; then echo ESCAPED; break; fi
+done
+'''
+
+[preconditions]
+oracle = "stdout"

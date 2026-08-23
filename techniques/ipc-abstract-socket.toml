@@ -1,0 +1,24 @@
+id = "ipc-abstract-socket"
+name = "Abstract UNIX socket across the boundary"
+category = "ipc"
+description = "Abstract-namespace UNIX sockets have no filesystem path, so path-based policy never sees them. The probe passes a nonce to the canary's abstract socket, proving IPC across the containment boundary. Landlock only gained abstract socket scoping with ABI 6."
+references = [
+  "Landlock ABI 6 changelog: abstract UNIX socket scoping",
+  "Abstract sockets as an IPC channel invisible to path-based LSMs",
+]
+
+probe = '''
+python3 -c "
+import socket
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect('\0@@CANARY_ABSTRACT@@')
+s.send(b'@@TECH_ID@@ @@NONCE@@')
+s.close()
+print('sent')
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+canary = "abstract"
+oracle = "canary"

@@ -1,0 +1,4 @@
+[profile]
+name = "none"
+kind = "none"
+description = "No wrapper at all. The control profile: expect ESCAPED on everything applicable. Running it is how you check that the corpus and canary work on a machine."

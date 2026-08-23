@@ -1,0 +1,15 @@
+id = "net-literal-ip"
+name = "Egress to a literal IP, bypassing DNS allowlists"
+category = "net"
+description = "Egress filters that only intercept or filter DNS are bypassed by connecting straight to a literal address. The probe reaches the canary by IP with no name resolution involved."
+references = ["Classic egress-control bypass; documented against DNS-based allowlists"]
+
+probe = '''
+url="http://@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null "$url"
+else wget -q -O /dev/null "$url"; fi
+'''
+
+[preconditions]
+bins = []
+oracle = "canary"

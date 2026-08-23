@@ -1,0 +1,10 @@
+[profile]
+name = "bwrap-loose"
+kind = "bwrap"
+description = "bubblewrap with the host mostly shared: read-only root, real /dev, shared network and PID namespace. Containment is filesystem-only; net and IPC techniques should escape."
+
+[profile.bwrap]
+ro_bind = ["/"]
+proc_bind = ["/proc"]
+dev_bind = ["/dev"]
+tmpfs = ["/tmp"]
