@@ -8,7 +8,7 @@ references = [
 ]
 
 probe = '''
-c=$(tr '\\0' ' ' < /proc/1/cmdline 2>/dev/null)
+c=$(tr '\0' ' ' < /proc/1/cmdline 2>/dev/null)
 [ -n "$c" ] || exit 0
 case "$c" in
   *systemd*|*sbin/init*|*containerd*|*dockerd*|*/wslinit*) echo ESCAPED ;;

@@ -1,9 +1,43 @@
 # Changelog
 
+## Unreleased
+
+Correctness and honesty pass over the corpus, harness, and docs.
+
+### Fixed
+- `integrity-failopen-retry` was a false CONTAINED: the `failopen-wrapper` profile
+  emitted a decorated `ESCAPED (...)` line the line-anchored oracle rejected, so the
+  fail-open pattern the technique exists to catch was never detected. The wrapper now
+  emits a bare `ESCAPED` marker; a unit test locks the wrapper↔oracle contract.
+- `net-url-userinfo` could never fire — the `@` userinfo separator was eaten by token
+  substitution (`example@@CANARY_HOST@@`), building an unresolvable host. Fixed to
+  `@@@CANARY_HOST@@`; it now escapes on a loose profile and is contained on a tight
+  one, so it is promoted into the accuracy harness (ground truth 91 → **94 checks**,
+  30 → 31 ground-truthed techniques).
+- `fs-sys-writable` always SKIPPED (its probe created a file at the sysfs root, which
+  the kernel forbids universally); it now checks writability of real escape-relevant
+  sysfs attributes non-destructively.
+- `integrity-no-sandbox-indicator` no longer falls through to `ESCAPED` on a `stat`
+  read error (fails closed); `fs-proc-pid1-cmdline` uses a correct `tr '\0'`.
+- Report evidence redacts the planted decoy secret value and the host decoy path, so
+  a shared `report.json`/`report.html` no longer trips secret scanners or leaks the
+  OS username.
+- `breakout diff` no longer counts a technique going to/from `SKIPPED` as an
+  "improvement" (lost coverage is not a win).
+- The runner restores the planted decoy env var after a run instead of leaving it in
+  an in-process caller's environment.
+
+### Changed
+- Several `net`/`fs` technique descriptions reworded to state exactly what they prove
+  (the HTTP L7 probes measure egress reachability carrying the trick bytes, not a
+  proxy parser differential; `fs-proc-environ` measures env-scrubbing of an injected
+  marker). README gains a hostile-sandbox / IDS / executable-content safety note and
+  states selftest coverage honestly (31 of 45 techniques ground-truthed).
+
 ## 0.3.0 — 2026-08-22
 
-Corpus 31 → 45 techniques, every new verdict proven by construction, and a
-palette case study built from a real measured run.
+Corpus 31 → 45 techniques, each new verdict either ground-truthed in the accuracy
+harness or explicitly exempted, and a palette case study built from a real measured run.
 
 ### Added
 - 14 techniques: writable `/etc`, `/proc/self/environ` secret leak, host-init
@@ -20,7 +54,8 @@ palette case study built from a real measured run.
   `fs-proc-environ` measures whether the boundary scrubs env secrets (Docker does not).
 - `selftest` ground truth grows 48 → **91 assertions** (16 → 30 techniques, plus a
   `sock-exposed` fixture that proves the Docker-socket escape); CI now runs it on
-  every push, holding the tool to the same standard it holds sandboxes.
+  every push, holding the tool to the same standard it holds sandboxes. (Later raised
+  to 94 assertions / 31 techniques — see Unreleased.)
 - Unit-test coverage guard: a new technique must be ground-truthed or explicitly
   exempted, so nothing joins the corpus without a verification decision.
 - README case-study charts, generated from the measured report in the five-grey
@@ -70,8 +105,8 @@ Corpus 16 → 31 techniques, new sandbox adapters, CI-measured leaderboard.
 - Per-profile gates: `os = [...]` and `requires = [...]`; unavailable profiles
   are SKIPPED with the reason.
 - Per-technique `timeout` in technique TOML.
-- CI: `leaderboard.yml` (measures every profile on ubuntu-24.04, commits the
-  refreshed leaderboard) and `breakout-sarif.yml` (ESCAPED findings as SARIF
+- CI: `leaderboard.yml` (measures every measurable profile on ubuntu-24.04, commits
+  the refreshed leaderboard) and `breakout-sarif.yml` (ESCAPED findings as SARIF
   annotations on PRs).
 
 ### Fixed

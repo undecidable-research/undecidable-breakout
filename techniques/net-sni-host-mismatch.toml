@@ -1,7 +1,7 @@
 id = "net-sni-host-mismatch"
 name = "SNI / Host mismatch via resolver override"
 category = "net"
-description = "Forces the connection to the canary address while the request carries a foreign hostname (curl --resolve). Filters that inspect only IP or only SNI see the allowed value; the HTTP layer routes by Host. Twin of the virtual-host confusion, driven from the resolver side."
+description = "Forces the connection to the canary address while the request carries a foreign hostname (curl --resolve), so the IP dialed and the Host sent disagree. Note this uses plain HTTP: there is no TLS handshake and thus no real SNI on the wire, so it exercises resolver-override Host/IP confusion, not a genuine SNI-vs-Host mismatch. Twin of the virtual-host confusion, driven from the resolver side."
 references = ["Domain fronting / SNI-Host mismatch class, widely documented against L7 filters"]
 
 probe = '''

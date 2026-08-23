@@ -8,7 +8,7 @@ references = [
 ]
 
 probe = '''
-u="http://trusted-allowlisted.example@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
+u="http://trusted-allowlisted.example@@@CANARY_HOST@@:@@CANARY_PORT@@/hit/@@TECH_ID@@/@@NONCE@@"
 if command -v curl >/dev/null 2>&1; then curl -s -o /dev/null "$u"
 else wget -q -O /dev/null "$u"; fi
 '''

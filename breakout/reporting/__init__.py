@@ -8,7 +8,38 @@ self-hosted, subset latin, embedded as base64 (niente mono, mai).
 import base64
 import html
 import json
+import re
 from pathlib import Path
+
+_DECOY_PATH_RE = re.compile(r"^.*(:/[^:]*breakout-decoy(?::[a-z]+)?)$")
+
+
+def _redact_cmd(cmd):
+    """Keep the launch command as evidence but strip the two things that must not
+    ride along into a shared report: the planted decoy secret value (looks like a
+    real key to secret scanners) and the host decoy path (leaks the OS username)."""
+    red = []
+    for tok in (cmd or []):
+        if isinstance(tok, str) and tok.startswith("BREAKOUT_DECOY_API_KEY="):
+            red.append("BREAKOUT_DECOY_API_KEY=***")
+        elif isinstance(tok, str) and "breakout-decoy" in tok and ":/" in tok:
+            red.append(_DECOY_PATH_RE.sub(r"<decoy-dir>\1", tok))
+        else:
+            red.append(tok)
+    return red
+
+
+def _redact_report(report):
+    """Redact command evidence in place before the report is written or rendered."""
+    for t in report.get("techniques", {}).values():
+        b = t.get("baseline")
+        if isinstance(b, dict) and "command" in b:
+            b["command"] = _redact_cmd(b["command"])
+        for p in t.get("profiles", {}).values():
+            r = p.get("result")
+            if isinstance(r, dict) and "command" in r:
+                r["command"] = _redact_cmd(r["command"])
+    return report
 
 _FONT_B64 = None
 
@@ -264,6 +295,7 @@ def render_sarif(report):
 def write_all(report, out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    _redact_report(report)
     (out / "report.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     (out / "report.html").write_text(render_html(report), encoding="utf-8")
     (out / "report.sarif").write_text(json.dumps(render_sarif(report), indent=2), encoding="utf-8")

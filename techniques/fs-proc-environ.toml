@@ -1,7 +1,7 @@
 id = "fs-proc-environ"
 name = "/proc/self/environ leaks across the boundary"
 category = "fs"
-description = "Reads /proc/self/environ and looks for credential-shaped variables (API tokens, keys, secrets) inherited from outside. Environment sanitization is a containment primitive; anything secret-shaped crossing the boundary unsanitized is reconnaissance gold for the escaped payload."
+description = "Reads /proc/self/environ and looks for credential-shaped variables (API tokens, keys, secrets) in the launch environment. Environment sanitization is a containment primitive; a boundary that does not strip secret-shaped variables leaks reconnaissance gold to the payload. The harness plants a decoy credential-shaped variable in every launched context, so this measures whether the boundary scrubs it: Docker cannot strip a variable the launcher injects, so ESCAPED for a Docker profile is expected; a clearenv sandbox (e.g. bwrap-strict) contains it."
 references = [
   "Environment variable secrets leakage in containers and CI (widely documented)",
 ]

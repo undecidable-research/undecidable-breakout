@@ -3,7 +3,7 @@ name = "DNS over TCP egress"
 category = "net"
 description = "Sends a DNS query over TCP to an external resolver. Egress filters that only rate-limit or inspect UDP/53 cleartext are bypassed by the TCP variant. Same class as CVE-2026-32946 against Harden-Runner. Constant, data-free lookup of example.com."
 references = [
-  "CVE-2026-32946: Harden-Runner DNS over TCP bypass (2026-03-18)",
+  "CVE-2026-32946: Harden-Runner DNS over TCP bypass (NVD published 2026-03-20)",
 ]
 
 probe = '''

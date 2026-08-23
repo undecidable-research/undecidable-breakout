@@ -61,6 +61,9 @@ GROUND_TRUTH = {
     "net-crlf-header-injection": {"airgap": "C", "wide-open": "E", "docker-tight": "C"},
     "net-dns-nonstandard-port":  {"airgap": "C", "wide-open": "E", "docker-tight": "C"},
     "net-redirect-follow":       {"airgap": "C", "wide-open": "E", "docker-tight": "C"},
+    # userinfo authority confusion: the '@' separator survives token substitution
+    # (@@@CANARY_HOST@@) so the client discards the userinfo and reaches the canary.
+    "net-url-userinfo":          {"airgap": "C", "wide-open": "E", "docker-tight": "C"},
     # DNS rebinding needs the container to route a DNS query back to our canary;
     # Docker Desktop's NAT does not, so it correctly skips here (it fires from a
     # Linux host or bwrap context, where loopback is the canary).
@@ -83,7 +86,7 @@ _CODES = {"C": "CONTAINED", "E": "ESCAPED", "K": "SKIPPED"}
 # without a conscious verification decision).
 SELFTEST_EXEMPT = {
     "net-dns-over-tcp", "net-ipv6-mapped-literal", "net-quic-udp443",
-    "net-sni-host-mismatch", "net-url-userinfo", "net-websocket-upgrade",
+    "net-sni-host-mismatch", "net-websocket-upgrade",
     "fs-hardlink-escape", "fs-sys-writable",
     "proc-cgroup-release-agent", "proc-ld-preload", "proc-ptrace-attach",
     "proc-tiocsti",

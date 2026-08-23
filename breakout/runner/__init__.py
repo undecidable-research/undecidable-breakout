@@ -298,59 +298,67 @@ def run(profiles, techniques, categories=None, tech_ids=None, out_dir="reports",
     nonce_run = secrets.token_hex(8)
     decoy_host = write_decoys(nonce_run)
     # plant a credential-shaped env secret in every context we launch: host/none/
-    # bwrap inherit it from this process, docker gets it via -e (below).
+    # bwrap inherit it from this process, docker gets it via -e (below). Restored
+    # in the finally below so an in-process (library/CI) caller is not left with a
+    # stray fake credential in its environment.
     decoy_env = {DECOY_ENV_VAR: f"sk-live-{nonce_run}"}
+    _prev_decoy_env = os.environ.get(DECOY_ENV_VAR)
     os.environ[DECOY_ENV_VAR] = decoy_env[DECOY_ENV_VAR]
+    try:
+        if any(p.kind == "docker" for p in profiles) or baseline_mode == "docker" or (
+                baseline_mode == "auto" and not host_is_posix()):
+            ok, why = docker_available()
+            if not ok:
+                raise RuntimeError(f"docker required but unavailable: {why}")
+            for img in {p.docker.get("image", BASELINE_IMAGE) for p in profiles if p.kind == "docker"} | {
+                    BASELINE_IMAGE}:
+                subprocess.run(["docker", "pull", "-q", img], capture_output=True, timeout=300)
 
-    if any(p.kind == "docker" for p in profiles) or baseline_mode == "docker" or (
-            baseline_mode == "auto" and not host_is_posix()):
-        ok, why = docker_available()
-        if not ok:
-            raise RuntimeError(f"docker required but unavailable: {why}")
-        for img in {p.docker.get("image", BASELINE_IMAGE) for p in profiles if p.kind == "docker"} | {
-                BASELINE_IMAGE}:
-            subprocess.run(["docker", "pull", "-q", img], capture_output=True, timeout=300)
+        ctxs = build_contexts(profiles, canary.info(), baseline_mode, decoy_host, decoy_env)
+        all_bins = sorted({b for t in techniques for b in t.bins})
+        bins_per_ctx = {ctx.name: probe_bins(ctx, all_bins) for ctx in ctxs}
 
-    ctxs = build_contexts(profiles, canary.info(), baseline_mode, decoy_host, decoy_env)
-    all_bins = sorted({b for t in techniques for b in t.bins})
-    bins_per_ctx = {ctx.name: probe_bins(ctx, all_bins) for ctx in ctxs}
+        results = {}
+        for tech in techniques:
+            if categories and tech.category not in categories:
+                continue
+            if tech_ids is not None and tech.id not in tech_ids:
+                continue
+            nonce = secrets.token_hex(8)
+            base = None
+            if not tech.skip_baseline:
+                bctx = ctxs[0]
+                reason = check_preconditions(tech, bctx, bins_per_ctx[bctx.name])
+                base = (ProbeResult(context=bctx.name, skipped=True, skip_reason=reason)
+                        if reason else run_probe(tech, bctx, nonce, canary, timeout))
+            per_profile = {}
+            for ctx in ctxs[1:]:
+                reason = check_preconditions(tech, ctx, bins_per_ctx[ctx.name])
+                per_profile[ctx.name] = (
+                    ProbeResult(context=ctx.name, skipped=True, skip_reason=reason)
+                    if reason else run_probe(tech, ctx, nonce, canary, timeout))
+            results[tech.id] = {"meta": {"name": tech.name, "category": tech.category,
+                                         "description": tech.description,
+                                         "references": tech.references},
+                                **scoring.classify(tech, base, per_profile)}
 
-    results = {}
-    for tech in techniques:
-        if categories and tech.category not in categories:
-            continue
-        if tech_ids is not None and tech.id not in tech_ids:
-            continue
-        nonce = secrets.token_hex(8)
-        base = None
-        if not tech.skip_baseline:
-            bctx = ctxs[0]
-            reason = check_preconditions(tech, bctx, bins_per_ctx[bctx.name])
-            base = (ProbeResult(context=bctx.name, skipped=True, skip_reason=reason)
-                    if reason else run_probe(tech, bctx, nonce, canary, timeout))
-        per_profile = {}
-        for ctx in ctxs[1:]:
-            reason = check_preconditions(tech, ctx, bins_per_ctx[ctx.name])
-            per_profile[ctx.name] = (
-                ProbeResult(context=ctx.name, skipped=True, skip_reason=reason)
-                if reason else run_probe(tech, ctx, nonce, canary, timeout))
-        results[tech.id] = {"meta": {"name": tech.name, "category": tech.category,
-                                     "description": tech.description,
-                                     "references": tech.references},
-                            **scoring.classify(tech, base, per_profile)}
-
-    canary.stop()
-    import breakout
-    report = {
-        "tool": "undecidable-breakout", "version": breakout.__version__,
-        "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "host": {"os": host_os_key(), "kernel": platform.release(),
-                 "baseline_mode": baseline_mode},
-        "canary": canary.info(), "run_nonce": nonce_run,
-        "techniques": results,
-        "scores": scoring.scores(results),
-    }
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    reporting.write_all(report, out)
-    return report
+        canary.stop()
+        import breakout
+        report = {
+            "tool": "undecidable-breakout", "version": breakout.__version__,
+            "started": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "host": {"os": host_os_key(), "kernel": platform.release(),
+                     "baseline_mode": baseline_mode},
+            "canary": canary.info(), "run_nonce": nonce_run,
+            "techniques": results,
+            "scores": scoring.scores(results),
+        }
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        reporting.write_all(report, out)
+        return report
+    finally:
+        if _prev_decoy_env is None:
+            os.environ.pop(DECOY_ENV_VAR, None)
+        else:
+            os.environ[DECOY_ENV_VAR] = _prev_decoy_env

@@ -121,7 +121,8 @@ None of these are Docker bugs — they are the residue a container cannot remove
 own, now pinned as tests: fix one and it can never silently regress. The full
 seven-profile matrix (bubblewrap, Landlock, the fail-open wrapper) is measured on
 Linux by CI and published to the [leaderboard](docs/leaderboard/index.html) on every
-push to `main`.
+push to `main` (the copy committed in the repo is a local sample until CI runs the
+first Linux measurement).
 
 ## When it makes sense
 
@@ -200,7 +201,7 @@ command that ran and the evidence it got out (a canary hit, or an `ESCAPED` stdo
 
 | slug | kind | what it is |
 |---|---|---|
-| `none` | host | no wrapper; the control — expect ESCAPED everywhere applicable |
+| `none` | none | no wrapper; the control — expect ESCAPED everywhere applicable |
 | `docker-loose` | docker | dev-default Docker: bridge net, all caps, host decoys mounted |
 | `docker-tight` | docker | hardened: `--network none`, read-only rootfs, `--cap-drop ALL`, no-new-privileges, pids limit |
 | `bwrap-loose` | bwrap | read-only host bind, shared net/pid — filesystem-only containment |
@@ -226,7 +227,12 @@ Organized by **how you get out**, not by which tool you break:
   DNS over TCP, DNS on a nonstandard port (853/DoT), DNS tunneling and rebinding,
   arbitrary external resolver, QUIC/UDP-443, ICMP channel, IPv6 fallback and
   IPv4-mapped literals, SNI/Host mismatch, redirect-following egress, WebSocket
-  upgrade.
+  upgrade. *Note:* the HTTP L7 parser-differential probes (null-byte host, backslash
+  authority, userinfo, CRLF, vhost, SNI) currently measure **raw egress reachability
+  carrying the trick bytes** against the local canary; exercising the differential
+  against a hostname-validating proxy needs a proxy+allowlist fixture, which is future
+  work — so a `CONTAINED` there means egress was blocked, not that a proxy's parser is
+  safe.
 - **fs** (11) — credential-path decoy read, `/proc/self/root` traversal
   (Ona/Claude Code), `/proc/self/environ` env-secret leak, host-init visibility
   via `/proc/1/cmdline`, setuid-surface inventory, symlink and hardlink across the
@@ -242,9 +248,13 @@ Organized by **how you get out**, not by which tool you break:
   detection.
 
 Each technique carries its sources, its applicability preconditions, an optional
-per-technique timeout, and a binary oracle. Every verdict is proven by
-construction in the accuracy harness (`breakout selftest`, **91/91**). The corpus
-grows by pull request: one file, one technique (`CONTRIBUTING.md`).
+per-technique timeout, and a binary oracle. **31 of the 45 techniques carry
+ground-truth assertions** in the accuracy harness (`breakout selftest`, **94 checks,
+all passing**); the other 14 are explicitly exempted (`SELFTEST_EXEMPT`) — they need
+a real Linux host, bwrap, an IPv6/abstract canary, or a capability the docker
+fixtures cannot reproduce by construction, and a unit test forces every technique
+into one bucket or the other. The corpus grows by pull request: one file, one
+technique (`CONTRIBUTING.md`).
 
 ## In CI
 
@@ -255,7 +265,8 @@ grows by pull request: one file, one technique (`CONTRIBUTING.md`).
   (`breakout diff` against the main-branch reference run).
 - `breakout-sarif.yml` — ESCAPED findings as code-scanning annotations
   (`report.sarif` → GitHub Checks).
-- `leaderboard.yml` — measures every profile on a pinned ubuntu runner and
+- `leaderboard.yml` — measures every *measurable* profile on a pinned ubuntu
+  runner (7 of 10; macOS Seatbelt and the agent-binary profiles are gated off) and
   commits the refreshed [leaderboard](docs/leaderboard/index.html), weekly and
   on push.
 
@@ -270,6 +281,16 @@ grows by pull request: one file, one technique (`CONTRIBUTING.md`).
 - Run it only on systems you own or are authorized to test (`RESPONSIBLE_USE.md`).
 - If Breakout finds a real bug in someone's sandbox: `RESPONSIBLE_DISCLOSURE.md` —
   coordinated, 90 days, help them fix it.
+- **A hostile sandbox under test can forge a `CONTAINED`.** v0 probes are rendered
+  shell scripts run inside the sandbox; the paired baseline and per-run nonces make
+  accidental false results unlikely, but a sandbox actively trying to look good is
+  out of scope for v0 (see `SECURITY.md`; the v1 static-binary runner closes this).
+- **The egress probes are data-free, but on the wire they look like DNS/ICMP
+  tunneling to an IDS.** Running `--categories fs,proc,ipc` (or omitting `net`)
+  avoids all external traffic if you are on a monitored network.
+- **Techniques and profiles are executable content.** A technique's `probe` and a
+  profile's `custom.cmd` are run as shell (on the *host* for the host/none/bwrap/
+  custom kinds), so only load corpus and profile files from a source you trust.
 
 ## Disclaimer — provided "AS IS"
 
@@ -311,7 +332,7 @@ deterministic corpus, no model anywhere) and measures the *cage*.
 ```bash
 python -m unittest discover -s tests -v   # 20 unit tests, no Docker needed
 python -m breakout.cli verify             # self-check
-python -m breakout.cli selftest           # accuracy harness, 91/91 (needs Docker)
+python -m breakout.cli selftest           # accuracy harness, 94/94 (needs Docker)
 ```
 
 Zero runtime dependencies: stdlib only (`tomllib`, `http.server`, `subprocess`,

@@ -1,7 +1,7 @@
 id = "net-nullbyte-hostname"
 name = "Hostname parser differential with embedded NUL byte"
 category = "net"
-description = "Crafts an HTTP request whose Host header contains an embedded NUL byte (evil\\0.allowed.example). Proxy layers that validate the hostname with string suffix checks (endsWith) accept it, while resolvers and parsers truncate at the NUL: the same class as the SOCKS5 parser differential that bypassed the Claude Code egress proxy (sandbox-runtime < 0.0.43, fixed 2026-04-01, no CVE assigned)."
+description = "Crafts an HTTP request whose Host header contains an embedded NUL byte (evil\\0.allowed.example), the same class as the SOCKS5 parser differential that bypassed the Claude Code egress proxy (sandbox-runtime < 0.0.43, fixed 2026-04-01, no CVE assigned). Against the local canary this measures raw HTTP egress reachability and carries the NUL-byte Host as evidence; the parser differential itself is only exercised when a hostname-validating egress proxy sits in front (a proxy+allowlist fixture is future work), so a CONTAINED here means the egress was blocked, not that the proxy's endsWith() check is safe."
 references = [
   "Claude Code sandbox-runtime SOCKS5 null-byte hostname differential (2.0.24 - 2.1.89)",
   "CVE-2025-66479: earlier bypass of the same proxy",

@@ -1,7 +1,7 @@
 id = "net-literal-ip"
 name = "Egress to a literal IP, bypassing DNS allowlists"
 category = "net"
-description = "Egress filters that only intercept or filter DNS are bypassed by connecting straight to a literal address. The probe reaches the canary by IP with no name resolution involved."
+description = "Egress filters that only intercept or filter DNS are bypassed by connecting straight to a literal address. The probe reaches the canary by IP with no name resolution involved on host/bwrap/landlock/none contexts (CANARY_HOST is 127.0.0.1). In Docker contexts CANARY_HOST is the gateway name host.docker.internal, so a name lookup does occur there and the literal-IP property holds only off-Docker."
 references = ["Classic egress-control bypass; documented against DNS-based allowlists"]
 
 probe = '''

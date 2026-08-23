@@ -1,14 +1,16 @@
 id = "fs-sys-writable"
 name = "Writable /sys"
 category = "fs"
-description = "Attempts a write inside /sys. A contained environment must keep sysfs read-only: a writable /sys/fs/cgroup or /sys/kernel exposes release_agent-style escapes and kernel knob abuse."
+description = "Checks whether a dangerous sysfs attribute is writable (non-destructively, with -w only). A contained environment keeps sysfs read-only: a writable /sys/kernel/uevent_helper or a writable /sys/module knob exposes kernel-knob abuse and uevent_helper escapes. Requires privilege (a --privileged or rw-sysfs config), so it is SKIPPED where /sys is read-only even outside the sandbox — never a false CONTAINED."
 references = [
   "Privileged-container guidance: sysfs must be ro",
+  "uevent_helper as a container-escape vector when /sys is writable",
 ]
 
 probe = '''
-f="/sys/breakout-$$"
-if echo breakout > "$f" 2>/dev/null; then echo ESCAPED; rm -f "$f"; fi
+for p in /sys/kernel/uevent_helper /sys/kernel/security /sys/module; do
+  [ -w "$p" ] && { echo ESCAPED; break; }
+done
 '''
 
 [preconditions]

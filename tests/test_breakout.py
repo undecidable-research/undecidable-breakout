@@ -168,6 +168,15 @@ class ScoringTest(unittest.TestCase):
         regs, imps = scoring.diff_reports(b, a)
         self.assertEqual(imps, [("p", "t", "ESCAPED", "CONTAINED")])
 
+    def test_diff_ignores_coverage_changes(self):
+        # a technique going to/from SKIPPED is a coverage/applicability change, not a
+        # containment change: never an "improvement", never a "regression".
+        a = {"techniques": {"t": {"profiles": {"p": {"status": "CONTAINED"}}}}}
+        b = {"techniques": {"t": {"profiles": {"p": {"status": "SKIPPED"}}}}}
+        self.assertEqual(scoring.diff_reports(a, b), ([], []))
+        a2 = {"techniques": {"t": {"profiles": {"p": {"status": "ESCAPED"}}}}}
+        self.assertEqual(scoring.diff_reports(a2, b), ([], []))
+
 
 class ProfilesTest(unittest.TestCase):
     def test_builtin_profiles_parse(self):
@@ -274,6 +283,37 @@ class SelftestCoverageTest(unittest.TestCase):
         undecided = ids - set(GROUND_TRUTH) - SELFTEST_EXEMPT
         self.assertFalse(undecided,
                          f"techniques with no selftest decision: {sorted(undecided)}")
+
+
+class FailopenWrapperTest(unittest.TestCase):
+    def test_wrapper_marker_is_detected_by_oracle(self):
+        # regression lock: the failopen-wrapper must emit a BARE `ESCAPED` line so the
+        # line-anchored oracle recognizes it — a decorated line (the old bug) would be
+        # a silent false CONTAINED for the exact fail-open pattern the class targets.
+        from breakout.runner import _stdout_passed
+        from breakout.sandboxes import find_profile
+        cmd = find_profile("failopen-wrapper").custom.get("cmd", "")
+        self.assertRegex(cmd, r"(?m)^\s*echo ESCAPED\s*$")
+        self.assertTrue(_stdout_passed("ESCAPED\nbreakout-probe-started"))
+        self.assertFalse(_stdout_passed("ESCAPED (note)\nbreakout-probe-started"))
+
+
+class RedactionTest(unittest.TestCase):
+    def test_command_evidence_redacts_secret_and_host_path(self):
+        from breakout.reporting import _redact_cmd, _redact_report
+        cmd = ["docker", "run", "-e", "BREAKOUT_DECOY_API_KEY=sk-live-abcd1234",
+               "-v", r"C:\Users\monti\.breakout-decoy:/breakout-decoy:ro",
+               "python:3.12-alpine"]
+        joined = " ".join(_redact_cmd(cmd))
+        self.assertNotIn("sk-live-abcd1234", joined)
+        self.assertIn("BREAKOUT_DECOY_API_KEY=***", joined)
+        self.assertNotIn("monti", joined)
+        self.assertIn("/breakout-decoy:ro", joined)  # container path + mode preserved
+        rep = {"techniques": {"t": {"baseline": {"command": cmd},
+               "profiles": {"p": {"result": {"command": cmd}}}}}}
+        _redact_report(rep)
+        self.assertNotIn("sk-live-abcd1234", json.dumps(rep))
+        self.assertNotIn("monti", json.dumps(rep))
 
 
 if __name__ == "__main__":

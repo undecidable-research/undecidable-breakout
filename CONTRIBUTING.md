@@ -32,8 +32,8 @@ oracle = "stdout"       # "stdout": probe prints ESCAPED | "canary": hit recorde
 Rules, enforced in review:
 
 1. **Tokens only** (`@@NONCE@@, @@TECH_ID@@, @@CANARY_URL@@, @@CANARY_HOST@@,
-   @@CANARY_PORT@@, @@DECOY_DIR@@, @@CANARY_ABSTRACT@@`). No hardcoded hosts, ports,
-   paths.
+   @@CANARY_PORT@@, @@CANARY_DNS_PORT@@, @@DECOY_DIR@@, @@CANARY_ABSTRACT@@`). No
+   hardcoded hosts, ports, paths.
 2. **Local canary or decoys only.** The single exception pattern is a constant,
    data-free external lookup (see `net-dns-over-https`); anything that transmits user
    data or nonces off-machine will be rejected.

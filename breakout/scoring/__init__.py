@@ -61,6 +61,8 @@ def diff_reports(a, b):
             after = p["status"]
             if before == after:
                 continue
+            if after == "SKIPPED" or before == "SKIPPED":
+                continue  # coverage change (applicability), not a containment change
             item = (slug, tid, before, after)
             (regressions if after == "ESCAPED" else improvements).append(item)
     return regressions, improvements

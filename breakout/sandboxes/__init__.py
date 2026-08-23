@@ -88,9 +88,7 @@ def render_docker_args(d, decoy_host_dir, image=None, env=None):
     for k, v in (env or {}).items():
         args += ["-e", f"{k}={v}"]
     net = d.get("network", "bridge")
-    if net in ("none", "host", "bridge"):
-        args += ["--network", net]
-    elif net:
+    if net:
         args += ["--network", net]
     if net != "none":
         args += ["--add-host", "host.docker.internal:host-gateway"]
