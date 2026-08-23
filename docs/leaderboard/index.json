@@ -3,27 +3,87 @@
   "rows": [
     {
       "profile": "docker-tight",
-      "date": "2026-08-22T18:04:44+0200",
-      "host": "windows 11",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
-      "overall": 88,
+      "overall": 93,
       "net": 100,
-      "fs": 71,
+      "fs": 83,
       "proc": 50,
       "ipc": 100,
       "integrity": 100
     },
     {
       "profile": "docker-loose",
-      "date": "2026-08-22T18:04:44+0200",
-      "host": "windows 11",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
-      "overall": 8,
+      "overall": 26,
+      "net": 7,
+      "fs": 33,
+      "proc": 50,
+      "ipc": 67,
+      "integrity": 100
+    },
+    {
+      "profile": "none",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
+      "corpus_version": "0.3.0",
+      "overall": 3,
       "net": 0,
       "fs": 0,
       "proc": 0,
-      "ipc": 50,
+      "ipc": 0,
       "integrity": 100
+    },
+    {
+      "profile": "failopen-wrapper",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
+      "corpus_version": "0.3.0",
+      "overall": 0,
+      "net": 0,
+      "fs": 0,
+      "proc": 0,
+      "ipc": 0,
+      "integrity": 0
+    },
+    {
+      "profile": "bwrap-loose",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
+      "corpus_version": "0.3.0",
+      "overall": null,
+      "net": null,
+      "fs": null,
+      "proc": null,
+      "ipc": null,
+      "integrity": null
+    },
+    {
+      "profile": "bwrap-strict",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
+      "corpus_version": "0.3.0",
+      "overall": null,
+      "net": null,
+      "fs": null,
+      "proc": null,
+      "ipc": null,
+      "integrity": null
+    },
+    {
+      "profile": "landlock-strict",
+      "date": "2026-08-23T13:59:52+0000",
+      "host": "linux 6.17.0-1022-azure",
+      "corpus_version": "0.3.0",
+      "overall": null,
+      "net": null,
+      "fs": null,
+      "proc": null,
+      "ipc": null,
+      "integrity": null
     }
   ]
 }
