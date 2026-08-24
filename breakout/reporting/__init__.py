@@ -278,12 +278,19 @@ def render_sarif(report):
             if p["status"] != "ESCAPED":
                 continue
             out = (p.get("result") or {}).get("output", "")[:300]
+            # These findings are runtime escapes, not code defects, so they have
+            # no source location of their own; CodeQL's uploader rejects
+            # location objects without a physicalLocation ("expected a physical
+            # location"), which used to fail the whole breakout-sarif workflow.
+            # Anchor each result to the profile file it escaped from: that is
+            # where the annotation belongs and where a maintainer can act.
             results.append({
                 "ruleId": tid, "level": "error",
                 "message": {"text": f"{t['meta']['name']} escaped containment in profile "
                                     f"'{slug}'. Evidence: {out}"},
-                "locations": [{"logicalLocations": [
-                    {"fullyQualifiedName": f"{slug}/{tid}", "kind": "namespace"}]}]})
+                "locations": [{"physicalLocation": {
+                    "artifactLocation": {"uri": f"profiles/{slug}.toml"},
+                    "region": {"startLine": 1}}}]})
     return {"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
             "version": "2.1.0",
             "runs": [{"tool": {"driver": {
