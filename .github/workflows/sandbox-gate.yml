@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # full history: the reference run below does `git checkout origin/main`,
+        # and a default shallow checkout (fetch-depth: 1) does not fetch that
+        # ref -- the gate used to die here with "pathspec 'origin/main' did not
+        # match" before ever running a single measurement.
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
