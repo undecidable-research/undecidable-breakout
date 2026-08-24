@@ -3,7 +3,7 @@
   "rows": [
     {
       "profile": "docker-tight",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": 93,
@@ -15,7 +15,7 @@
     },
     {
       "profile": "docker-loose",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": 25,
@@ -27,7 +27,7 @@
     },
     {
       "profile": "none",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": 3,
@@ -39,7 +39,7 @@
     },
     {
       "profile": "failopen-wrapper",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": 0,
@@ -51,7 +51,7 @@
     },
     {
       "profile": "bwrap-loose",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": null,
@@ -63,7 +63,7 @@
     },
     {
       "profile": "bwrap-strict",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": null,
@@ -75,7 +75,7 @@
     },
     {
       "profile": "landlock-strict",
-      "date": "2026-08-24T03:56:23+0000",
+      "date": "2026-08-24T08:53:30+0000",
       "host": "linux 6.17.0-1022-azure",
       "corpus_version": "0.3.0",
       "overall": null,
