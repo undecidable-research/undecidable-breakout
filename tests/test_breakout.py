@@ -256,6 +256,22 @@ class ReportingTest(unittest.TestCase):
                                          "score": 0}}},
         }
 
+    def test_sarif_results_carry_physical_location(self):
+        # regression lock for the CodeQL upload failure: a SARIF result whose
+        # location object lacks a physicalLocation is rejected by Code Scanning
+        # ("locationFromSarifResult: expected a physical location"), which made
+        # the breakout-sarif workflow fail for the whole PR. Every ESCAPED
+        # result must be anchored to a physical location.
+        with tempfile.TemporaryDirectory() as d:
+            reporting.write_all(self._report(), Path(d))
+            sarif = json.loads((Path(d) / "report.sarif").read_text())
+            results = sarif["runs"][0]["results"]
+            self.assertTrue(results, "expected at least one ESCAPED result")
+            for result in results:
+                phys = result["locations"][0]["physicalLocation"]
+                self.assertTrue(phys["artifactLocation"]["uri"])
+                self.assertIn("region", phys)
+
     def test_reports_render_and_escape(self):
         with tempfile.TemporaryDirectory() as d:
             reporting.write_all(self._report(), Path(d))
