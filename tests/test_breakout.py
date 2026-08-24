@@ -1,8 +1,11 @@
+import ctypes
 import json
 import os
 import secrets
+import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -221,17 +224,84 @@ class ProfilesTest(unittest.TestCase):
         self.assertIn("host.docker.internal:host-gateway", argv)
 
 
-@unittest.skipUnless(os.name == "posix" and shutil.which("cc"),
-                     "landlock helper needs POSIX + cc (verified in Linux CI)")
+def kernel_landlock_abi():
+    """Highest Landlock ABI supported by the RUNNING KERNEL (0 = unavailable).
+
+    Probed directly with landlock_create_ruleset(NULL, 0, VERSION) instead of
+    trusting the helper on purpose: a launcher that dies during its own init
+    must stay distinguishable from a kernel without Landlock, otherwise the
+    enforcement tests below would silently skip over exactly the bug they
+    exist to catch.
+    """
+    if not sys.platform.startswith("linux"):
+        return 0
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+        rv = libc.syscall(ctypes.c_long(444),           # SYS_landlock_create_ruleset
+                          ctypes.c_void_p(None), ctypes.c_size_t(0),
+                          ctypes.c_uint(1))             # LANDLOCK_CREATE_RULESET_VERSION
+    except (OSError, AttributeError, ValueError):
+        return 0
+    return max(int(rv), 0)
+
+
+@unittest.skipUnless(sys.platform.startswith("linux") and shutil.which("cc"),
+                     "landlock helper is Linux-only and needs cc (verified in Linux CI)")
 class LandlockTest(unittest.TestCase):
-    def test_helper_compiles_and_restricts(self):
+    def setUp(self):
         from breakout.sandboxes import landlock_binary
-        binary = landlock_binary()
-        self.assertTrue(binary)
-        # decoy read must fail under the helper => containment working
-        r = subprocess.run([binary, "sh", "-c", "cat $HOME/.breakout-decoy/credentials.env"],
+        self.binary = landlock_binary()
+        self.abi = kernel_landlock_abi()
+
+    def _require_kernel_landlock(self):
+        if self.abi < 1:
+            self.skipTest(f"kernel does not support Landlock (abi={self.abi})")
+
+    def test_helper_execs_allowed_command(self):
+        # Positive control: the launcher must reach exec. The historical bug made
+        # landlock_create_ruleset() fail with EINVAL, so the helper exited 126
+        # before executing anything while the old assertion ("secret absent from
+        # stdout") kept passing vacuously.
+        self._require_kernel_landlock()
+        r = subprocess.run([self.binary, "sh", "-c", "printf breakout-ok"],
                            capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0,
+                         f"launcher exited {r.returncode} before exec: "
+                         f"{r.stderr.strip()[:200]}")
+        self.assertEqual(r.stdout.strip(), "breakout-ok")
+
+    def test_helper_denies_home_read_after_child_started(self):
+        # The child announces itself BEFORE attempting the forbidden read, so a
+        # missing secret can only mean Landlock denied it -- never that the
+        # launcher failed during initialization (the old false positive).
+        self._require_kernel_landlock()
+        with tempfile.TemporaryDirectory(dir=Path.home()) as d:
+            secret = Path(d) / "secret.env"
+            secret.write_text("BREAKOUT_NONCE=test-nonce\n")
+            script = ("echo breakout-child-started; "
+                      f"if cat {shlex.quote(str(secret))} >/dev/null 2>&1; "
+                      "then echo breakout-decoy-readable; fi")
+            r = subprocess.run([self.binary, "sh", "-c", script],
+                               capture_output=True, text=True, timeout=30)
+        # the child actually ran under the sandbox and shut down cleanly...
+        self.assertIn("breakout-child-started", r.stdout,
+                      f"child never started: rc={r.returncode} {r.stderr.strip()[:200]}")
+        self.assertEqual(r.returncode, 0)
+        # ...and Landlock denied the home read (home is intentionally unallowed)
         self.assertNotIn("BREAKOUT_NONCE", r.stdout)
+        self.assertNotIn("breakout-decoy-readable", r.stdout)
+
+    def test_helper_fails_closed_without_landlock(self):
+        # On a kernel without Landlock the only correct behavior is refusing to
+        # launch (exit 126), so the runner marks the profile SKIPPED instead of
+        # running unsandboxed.
+        if self.abi >= 1:
+            self.skipTest("kernel supports Landlock; fail-closed path unreachable")
+        r = subprocess.run([self.binary, "sh", "-c", "printf breakout-ok"],
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 126)
+        self.assertNotIn("breakout-ok", r.stdout)
 
 
 class ReportingTest(unittest.TestCase):
