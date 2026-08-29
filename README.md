@@ -52,20 +52,23 @@ python -m breakout.cli score reports/report.json
 Expected output (Docker Desktop, Windows host — yours will vary by kernel and Docker):
 
 ```text
-  docker-loose           ##..................   8%    2 contained / 24 escaped / 19 skipped
-  docker-tight           ##################..  88%   23 contained /  3 escaped / 19 skipped
+  docker-loose           #...................   7%    2 contained / 28 escaped / 17 skipped
+  docker-tight           #################...  83%  25 contained /  5 escaped / 17 skipped
 ```
 
 Same corpus, same machine, one minute: one red scorecard, one green-ish scorecard.
 Open `reports/report.html` for the full evidence — every ESCAPED carries the exact
 command and the evidence it got out — a canary hit, or an `ESCAPED` line on stdout.
 
-Note the honest reds that survive `docker-tight`: `proc-ld-linux-exec` (executing a
-binary through the ELF loader defeats path-based exec filters — the exact class Ona
-documented against Claude Code), `fs-dev-write` (Docker's default `/dev` is a writable
-tmpfs), and `fs-proc-environ` (a secret in the environment is readable through
-`/proc/self/environ` — Docker never scrubs it). A tight score is a measurement, not a
-certification.
+Note the honest reds that survive `docker-tight` on this run: `proc-ld-linux-exec`
+(executing a binary through the ELF loader defeats path-based exec filters — the exact
+class Ona documented against Claude Code), `fs-dev-write` (Docker's default `/dev` is a
+writable tmpfs), `fs-sys-writable` (which sysfs attributes are writable depends on
+kernel and Docker version — this host has some), `fs-proc-environ` (a secret in the
+environment is readable through `/proc/self/environ` — Docker never scrubs it), and
+`proc-memfd-exec` (fileless execution via `memfd_create` bypasses any filesystem-based
+noexec policy, since the anonymous file isn't backed by a mount point at all). A tight
+score is a measurement, not a certification — yours may show a different set.
 
 ## How it works
 
@@ -167,7 +170,8 @@ python -m breakout.cli run --profile docker-tight --categories fs,proc --out rep
 
 ```
 breakout run  --profile <slug> [--profile ...] [options]   # measure a configuration
-breakout list                                              # all 45 techniques, 10 profiles
+breakout list                                              # all 47 techniques, 12 profiles
+breakout doctor                                             # what this host can actually run
 breakout score   reports/report.json                       # print a saved scorecard
 breakout diff    before.json after.json                    # exit 1 on any regression
 breakout leaderboard r1.json [r2.json ...] --out out.html  # build the leaderboard page
@@ -179,11 +183,18 @@ breakout selftest                                          # accuracy harness (n
 
 - `--profile SLUG` — repeatable; a builtin slug or a path to a profile `.toml`.
 - `--categories net,fs,proc,ipc,integrity` — restrict the corpus (default: all).
-- `--out DIR` — where `report.json`, `report.html`, and `report.sarif` are written.
+- `--out DIR` — where `report.json`, `report.html`, `report.sarif`, and
+  `report.junit.xml` are written.
 - `--timeout SECONDS` — per-probe timeout (default 20).
 - `--baseline auto|host|docker` — where the outside-sandbox control runs. `auto` uses
   the host on Linux and Docker on macOS/Windows.
+- `--repeat N` — run each probe N times; a technique that escapes on some repeats but
+  not all is marked `flaky` in the report instead of silently picking one result.
 - `--techniques-dir DIR` — point at your own corpus instead of the builtin one.
+
+Not sure what will even run here? `breakout doctor` prints Docker/bwrap/cc
+availability, canary IPv6/abstract-socket support, and an availability check for every
+builtin profile — before you spend a `run` finding it out one `SKIPPED` at a time.
 
 Typical use — measure, keep the report, gate future changes:
 
@@ -204,6 +215,8 @@ command that ran and the evidence it got out (a canary hit, or an `ESCAPED` stdo
 | `none` | none | no wrapper; the control — expect ESCAPED everywhere applicable |
 | `docker-loose` | docker | dev-default Docker: bridge net, all caps, host decoys mounted |
 | `docker-tight` | docker | hardened: `--network none`, read-only rootfs, `--cap-drop ALL`, no-new-privileges, pids limit |
+| `gvisor-strict` | docker | docker-tight settings run under gVisor (`runsc`): syscalls intercepted by a user-space kernel instead of namespaces alone |
+| `kata-strict` | docker | docker-tight settings run under Kata Containers: each container gets its own lightweight VM |
 | `bwrap-loose` | bwrap | read-only host bind, shared net/pid — filesystem-only containment |
 | `bwrap-strict` | bwrap | unshared net/pid/ipc/uts/cgroup, minimal binds, clearenv, die-with-parent |
 | `landlock-strict` | landlock | Landlock LSM via the bundled C helper (compiled on demand): read-only system dirs, writable /tmp /dev /var/tmp, home unreachable; TCP also denied on kernels ≥ 6.7 |
@@ -213,9 +226,13 @@ command that ran and the evidence it got out (a canary hit, or an `ESCAPED` stdo
 
 Profiles are data (TOML). Write your own: see `examples/profiles/` and
 `profiles/*.toml`. A profile can declare `os = [...]` (host OS gate) and
-`requires = [...]` (binaries that must exist).
+`requires = [...]` (binaries that must exist). A `docker`-kind profile can also set
+`[profile.docker].runtime` to select an alternate OCI runtime (`--runtime <name>`) —
+that one setting is the whole diff between `docker-tight`, `gvisor-strict`, and
+`kata-strict`. A runtime not registered with the daemon is `SKIPPED` with the
+daemon's own error at preflight, same as any other missing capability.
 
-## The corpus (v0.3: 45 techniques, 5 classes)
+## The corpus (v0.3: 47 techniques, 5 classes)
 
 Organized by **how you get out**, not by which tool you break:
 
@@ -233,11 +250,14 @@ Organized by **how you get out**, not by which tool you break:
   against a hostname-validating proxy needs a proxy+allowlist fixture, which is future
   work — so a `CONTAINED` there means egress was blocked, not that a proxy's parser is
   safe.
-- **fs** (11) — credential-path decoy read, `/proc/self/root` traversal
+- **fs** (12) — credential-path decoy read, `/proc/self/root` traversal
   (Ona/Claude Code), `/proc/self/environ` env-secret leak, host-init visibility
   via `/proc/1/cmdline`, setuid-surface inventory, symlink and hardlink across the
-  boundary, writable `/etc`, `/dev`, and `/sys`, device-node creation (CAP_MKNOD).
-- **proc** (8) — executing via `ld-linux` instead of `execve`, `LD_PRELOAD`
+  boundary, writable `/etc`, `/dev`, and `/sys`, writable-*and*-executable `/tmp`
+  (contained the moment a profile mounts it `noexec`), device-node creation
+  (CAP_MKNOD).
+- **proc** (9) — executing via `ld-linux` instead of `execve`, fileless execution
+  via `memfd_create` + exec-from-fd (no mount to apply `noexec` to), `LD_PRELOAD`
   passing through unsanitized, ptrace attach, TIOCSTI terminal injection,
   dangerous CapEff bits, cgroup `release_agent`, signals to a shared PID
   namespace, unprivileged user-namespace creation.
@@ -248,8 +268,8 @@ Organized by **how you get out**, not by which tool you break:
   detection.
 
 Each technique carries its sources, its applicability preconditions, an optional
-per-technique timeout, and a binary oracle. **31 of the 45 techniques carry
-ground-truth assertions** in the accuracy harness (`breakout selftest`, **94 checks,
+per-technique timeout, and a binary oracle. **33 of the 47 techniques carry
+ground-truth assertions** in the accuracy harness (`breakout selftest`, **100 checks,
 all passing**); the other 14 are explicitly exempted (`SELFTEST_EXEMPT`) — they need
 a real Linux host, bwrap, an IPv6/abstract canary, or a capability the docker
 fixtures cannot reproduce by construction, and a unit test forces every technique
@@ -266,9 +286,9 @@ technique (`CONTRIBUTING.md`).
 - `breakout-sarif.yml` — ESCAPED findings as code-scanning annotations
   (`report.sarif` → GitHub Checks).
 - `leaderboard.yml` — measures every *measurable* profile on a pinned ubuntu
-  runner (7 of 10; macOS Seatbelt and the agent-binary profiles are gated off) and
-  commits the refreshed [leaderboard](docs/leaderboard/index.html), weekly and
-  on push.
+  runner (7 of 12; macOS Seatbelt, the agent-binary profiles, and the gVisor/Kata
+  profiles — no registered runtime on the runner — are gated off) and commits the
+  refreshed [leaderboard](docs/leaderboard/index.html), weekly and on push.
 
 ## Safety model (non-negotiable)
 

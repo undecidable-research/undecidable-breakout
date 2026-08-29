@@ -1,14 +1,17 @@
-"""CLI: run, list, score, diff, leaderboard, verify."""
+"""CLI: run, list, score, diff, leaderboard, verify, doctor."""
 import argparse
 import json
+import platform
 import secrets
+import shutil
 import sys
 import urllib.request
 from pathlib import Path
 
 from . import __version__, corpus, reporting, runner, scoring
 from .canary import Canary
-from .sandboxes import builtin_dir, find_profile, load_profile
+from .sandboxes import (builtin_dir, docker_available, find_profile,
+                        host_os_key, load_profile, profile_unavailable)
 
 
 def _load_corpus(techniques_dir):
@@ -31,7 +34,8 @@ def cmd_run(args):
             sys.exit(f"unknown categories: {', '.join(bad)}. Valid: {', '.join(corpus.CATEGORIES)}")
     profiles = [find_profile(slug) for slug in args.profile]
     report = runner.run(profiles, techs, categories=cats, out_dir=args.out,
-                        timeout=args.timeout, baseline_mode=args.baseline)
+                        timeout=args.timeout, baseline_mode=args.baseline,
+                        repeat=args.repeat)
     print()
     for slug, scores in report["scores"].items():
         o = scores["overall"]
@@ -39,8 +43,14 @@ def cmd_run(args):
         print(f"  {slug:<22} {_bar(o['score'])} {pct}   "
               f"{o['contained']:>2} contained / {o['escaped']:>2} escaped / "
               f"{o['skipped']:>2} skipped")
+    if args.repeat > 1:
+        flaky = sorted({tid for tid, t in report["techniques"].items()
+                        for p in t["profiles"].values()
+                        if (p.get("result") or {}).get("flaky")})
+        if flaky:
+            print(f"\n  flaky across {args.repeat} repeats ({len(flaky)}): {', '.join(flaky)}")
     print(f"\n  reports -> {Path(args.out).resolve()} "
-          f"(report.json, report.html, report.sarif)")
+          f"(report.json, report.html, report.sarif, report.junit.xml)")
 
 
 def cmd_list(args):
@@ -80,6 +90,28 @@ def cmd_leaderboard(args):
     data = reporting.leaderboard(args.reports, args.out,
                                  args.out.replace(".html", ".json") if args.out.endswith(".html") else None)
     print(f"leaderboard: {Path(args.out).resolve()} ({len(data['rows'])} rows)")
+
+
+def cmd_doctor(args):
+    """What this host can actually run, before you spend a `run` finding out."""
+    print(f"os: {host_os_key()} ({platform.platform()})")
+    print(f"python: {platform.python_version()}")
+    ok, why = docker_available()
+    print(f"docker: {'ok, ' + why if ok else 'unavailable: ' + why}")
+    bwrap = shutil.which("bwrap")
+    print(f"bwrap: {'ok, ' + bwrap if bwrap else 'not found'}")
+    cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    print(f"cc (landlock helper): {'ok, ' + cc if cc else 'not found'}")
+    canary = Canary()
+    info = canary.info()
+    canary.stop()
+    print(f"canary: ipv6={'ok' if info['ipv6'] else 'unavailable'}  "
+          f"abstract-unix-socket={'ok' if info['abstract'] else 'unavailable'}")
+    print("\nbuiltin profiles:")
+    for f in sorted(builtin_dir().glob("*.toml")):
+        p = load_profile(f)
+        reason = profile_unavailable(p)
+        print(f"  {p.slug:<24} {p.kind:<8} {'ok' if not reason else 'unavailable: ' + reason}")
 
 
 def cmd_verify(args):
@@ -125,11 +157,19 @@ def main(argv=None):
     p.add_argument("--baseline", choices=("auto", "host", "docker"), default="auto",
                    help="where the outside-sandbox control runs (auto: host on POSIX, "
                         "docker on Windows)")
+    p.add_argument("--repeat", type=int, default=1,
+                   help="repeat each probe N times; a technique that escapes on "
+                        "some repeats but not all is marked flaky (default 1)")
     p.set_defaults(fn=cmd_run)
 
     p = sub.add_parser("list", help="list techniques and profiles")
     p.add_argument("--techniques-dir")
     p.set_defaults(fn=cmd_list)
+
+    p = sub.add_parser("doctor",
+                       help="diagnose host capabilities: docker, bwrap, cc, canary, "
+                            "and every builtin profile")
+    p.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("score", help="print the scorecard of a saved report")
     p.add_argument("report")

@@ -1,0 +1,14 @@
+[profile]
+name = "kata-strict"
+kind = "docker"
+description = "Kata Containers: each container boots inside its own lightweight VM, so containment is a hardware boundary (VT-x/SVM) rather than a kernel one. Requires the daemon configured with kata-runtime (dockerd --add-runtime kata-runtime=/usr/bin/kata-runtime); SKIPPED with the daemon's own error when it is not."
+
+[profile.docker]
+image = "python:3.12-alpine"
+runtime = "kata-runtime"
+network = "none"
+read_only = true
+cap_drop = "ALL"
+security_opt = ["no-new-privileges"]
+pids_limit = 64
+tmpfs = ["/tmp"]

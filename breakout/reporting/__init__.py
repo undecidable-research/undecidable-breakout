@@ -9,6 +9,7 @@ import base64
 import html
 import json
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 _DECOY_PATH_RE = re.compile(r"^.*(:/[^:]*breakout-decoy(?::[a-z]+)?)$")
@@ -208,6 +209,10 @@ def _evidence(p):
           f"<pre>exit: {_esc(r.get('exit_code'))}  ·  duration: {r.get('duration', 0):.2f}s"
           f"  ·  timeout: {r.get('timeout', False)}</pre>",
           f"<pre>{_esc(r.get('output', ''))}</pre>"]
+    if r.get("repeats", 1) > 1:
+        flaky_note = ("FLAKY: passed on some repeats but not all"
+                      if r.get("flaky") else "stable across all repeats")
+        ev.append(f"<pre>repeats: {r['repeats']}  ·  {flaky_note}</pre>")
     if r.get("canary_hits"):
         ev.append(f"<pre>canary hits: {_esc(json.dumps(r['canary_hits'], default=str))}</pre>")
     ev.append("</details>")
@@ -258,9 +263,10 @@ def render_html(report):
                 name_cell = (f"<span class='tname'>{_esc(tid)}<small>{_esc(t['meta']['name'])}"
                              f"</small></span>") if first else ""
                 first = False
+                flaky = " <span class='note'>· flaky</span>" if (p.get("result") or {}).get("flaky") else ""
                 h.append(f"<tr><td>{name_cell}</td><td class='note' style='letter-spacing:0'>"
                          f"{_esc(slug)}</td>"
-                         f"<td>{_pill(p['status'])}</td>"
+                         f"<td>{_pill(p['status'])}{flaky}</td>"
                          f"<td><span class='note'>{_esc(p['reason'])}</span>"
                          f"{_evidence(p)}</td></tr>")
         h.append("</tbody></table>")
@@ -299,6 +305,33 @@ def render_sarif(report):
                 "rules": rules}}, "results": results}]}
 
 
+def render_junit(report):
+    """One <testsuite> per profile: ESCAPED is a failure, SKIPPED is skipped —
+    so a CI test-results panel shows containment regressions like any other
+    failing test, with no report.json parsing required."""
+    root = ET.Element("testsuites")
+    by_slug = {}
+    for tid, t in report.get("techniques", {}).items():
+        for slug, p in t["profiles"].items():
+            by_slug.setdefault(slug, []).append((tid, t, p))
+    for slug, items in sorted(by_slug.items()):
+        failures = sum(1 for _, _, p in items if p["status"] == "ESCAPED")
+        skipped = sum(1 for _, _, p in items if p["status"] == "SKIPPED")
+        suite = ET.SubElement(root, "testsuite", name=slug, tests=str(len(items)),
+                              failures=str(failures), skipped=str(skipped))
+        for tid, t, p in items:
+            case = ET.SubElement(suite, "testcase", classname=t["meta"]["category"],
+                                 name=f"{tid}: {t['meta']['name']}")
+            if p["status"] == "ESCAPED":
+                out = (p.get("result") or {}).get("output", "")[:2000]
+                fail = ET.SubElement(case, "failure",
+                                     message=f"containment bypassed on profile '{slug}'")
+                fail.text = out
+            elif p["status"] == "SKIPPED":
+                ET.SubElement(case, "skipped", message=p.get("reason", ""))
+    return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
 def write_all(report, out):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -306,6 +339,7 @@ def write_all(report, out):
     (out / "report.json").write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     (out / "report.html").write_text(render_html(report), encoding="utf-8")
     (out / "report.sarif").write_text(json.dumps(render_sarif(report), indent=2), encoding="utf-8")
+    (out / "report.junit.xml").write_text(render_junit(report), encoding="utf-8")
 
 
 def _bar_cell(score):

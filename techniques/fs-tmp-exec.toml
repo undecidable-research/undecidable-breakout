@@ -1,0 +1,18 @@
+id = "fs-tmp-exec"
+name = "Writable and executable /tmp"
+category = "fs"
+description = "Writes a script into /tmp, marks it executable, and runs it directly (no interpreter indirection). A /tmp that is both writable and executable lets anything already inside the boundary drop and run its own binary — read-only rootfs or not. Docker's own `--tmpfs /tmp` mounts `noexec` by default, which is why this is CONTAINED on a profile that sets it and ESCAPED on one that leaves /tmp on the default (writable, executable) container rootfs."
+references = [
+  "noexec on writable scratch space as a containment control",
+]
+
+probe = '''
+f="/tmp/breakout-$$"
+if printf '#!/bin/sh\necho ESCAPED\n' > "$f" 2>/dev/null && chmod +x "$f" 2>/dev/null; then
+  "$f" 2>/dev/null
+  rm -f "$f"
+fi
+'''
+
+[preconditions]
+oracle = "stdout"

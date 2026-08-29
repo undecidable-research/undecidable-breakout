@@ -12,12 +12,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Host diagnostics
+        run: python -m breakout.cli doctor
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Self-check
         run: python -m breakout.cli verify
       - name: Accuracy harness (every verdict must match ground truth)
         run: python -m breakout.cli selftest --out reports/selftest
+      - name: Repeat/flaky smoke check
+        run: |
+          python -m breakout.cli run --profile docker-tight --baseline host \
+            --categories fs,proc --repeat 3 --out reports/repeat-check
       - name: Demo run (loose vs tight)
         run: |
           python -m breakout.cli run --profile docker-loose --profile docker-tight \

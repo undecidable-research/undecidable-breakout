@@ -1,0 +1,14 @@
+[profile]
+name = "gvisor-strict"
+kind = "docker"
+description = "gVisor (runsc): a user-space kernel intercepts every syscall before it reaches the host kernel, instead of relying on namespaces/seccomp alone. Requires the daemon configured with the runsc runtime (dockerd --add-runtime runsc=/path/to/runsc, or Docker Desktop's Sandboxed Containers setting); SKIPPED with the daemon's own error when it is not."
+
+[profile.docker]
+image = "python:3.12-alpine"
+runtime = "runsc"
+network = "none"
+read_only = true
+cap_drop = "ALL"
+security_opt = ["no-new-privileges"]
+pids_limit = 64
+tmpfs = ["/tmp"]

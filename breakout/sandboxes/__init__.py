@@ -87,6 +87,8 @@ def render_docker_args(d, decoy_host_dir, image=None, env=None):
     args = ["docker", "run", "--rm", "-i"]
     for k, v in (env or {}).items():
         args += ["-e", f"{k}={v}"]
+    if d.get("runtime"):
+        args += ["--runtime", d["runtime"]]
     net = d.get("network", "bridge")
     if net:
         args += ["--network", net]

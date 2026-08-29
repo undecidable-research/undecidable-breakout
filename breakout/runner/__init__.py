@@ -276,11 +276,14 @@ def _aggregate(results):
     return best
 
 
-def _probe_repeated(tech, ctx, canary, timeout, repeat):
+def _probe_repeated(tech, ctx, canary, timeout, repeat, bins_available):
+    """Run a probe `repeat` times and collapse the results into one verdict.
+    repeat=1 is exactly one check_preconditions + run_probe call, so it is
+    behaviorally identical to the old unrepeated path."""
     outs = []
     for _ in range(max(1, repeat)):
         nonce = secrets.token_hex(8)
-        reason = check_preconditions(tech, ctx, _ctx_bins_cache.get(ctx.name, set()))
+        reason = check_preconditions(tech, ctx, bins_available)
         outs.append(ProbeResult(context=ctx.name, skipped=True, skip_reason=reason)
                     if reason else run_probe(tech, ctx, nonce, canary, timeout))
     return _aggregate(outs)
@@ -324,19 +327,15 @@ def run(profiles, techniques, categories=None, tech_ids=None, out_dir="reports",
                 continue
             if tech_ids is not None and tech.id not in tech_ids:
                 continue
-            nonce = secrets.token_hex(8)
             base = None
             if not tech.skip_baseline:
                 bctx = ctxs[0]
-                reason = check_preconditions(tech, bctx, bins_per_ctx[bctx.name])
-                base = (ProbeResult(context=bctx.name, skipped=True, skip_reason=reason)
-                        if reason else run_probe(tech, bctx, nonce, canary, timeout))
+                base = _probe_repeated(tech, bctx, canary, timeout, repeat,
+                                       bins_per_ctx[bctx.name])
             per_profile = {}
             for ctx in ctxs[1:]:
-                reason = check_preconditions(tech, ctx, bins_per_ctx[ctx.name])
-                per_profile[ctx.name] = (
-                    ProbeResult(context=ctx.name, skipped=True, skip_reason=reason)
-                    if reason else run_probe(tech, ctx, nonce, canary, timeout))
+                per_profile[ctx.name] = _probe_repeated(
+                    tech, ctx, canary, timeout, repeat, bins_per_ctx[ctx.name])
             results[tech.id] = {"meta": {"name": tech.name, "category": tech.category,
                                          "description": tech.description,
                                          "references": tech.references},

@@ -2,7 +2,39 @@
 
 ## Unreleased
 
-Correctness and honesty pass over the corpus, harness, and docs.
+Correctness and honesty pass over the corpus, harness, and docs, plus four
+additions: repeatable/flaky probes, a `doctor` command, JUnit output, and
+alternate-runtime (gVisor/Kata) profiles.
+
+### Added
+- `--repeat N` on `breakout run`: repeats each probe N times and marks a
+  technique `flaky` in the report when it escapes on some repeats but not
+  all — an escape that works once in five is still an escape, but flapping
+  between CONTAINED and ESCAPED is itself a signal worth seeing. Wires up
+  `_probe_repeated`/`_aggregate`, which existed but were never called from
+  `run()` and read from a cache that was never populated.
+- `breakout doctor`: prints what this host can actually run — Docker/bwrap/cc
+  availability, canary IPv6/abstract-socket support, and an availability
+  check for every builtin profile — before you spend a `run` finding it out
+  one `SKIPPED` at a time.
+- JUnit XML output (`report.junit.xml`) alongside JSON/HTML/SARIF, one
+  `<testsuite>` per profile, ESCAPED as `<failure>` and SKIPPED as
+  `<skipped>`, so CI systems that render test results natively show
+  containment regressions like any other failing test.
+- `[profile.docker].runtime` lets a Docker profile select an alternate OCI
+  runtime (`--runtime <name>`). Two new builtin profiles use it:
+  `gvisor-strict` (gVisor/`runsc`, syscalls intercepted by a user-space
+  kernel) and `kata-strict` (Kata Containers, VM-per-container) — both
+  `SKIPPED` with the daemon's own error when the runtime isn't registered.
+- 2 techniques: `fs-tmp-exec` (docker-tight's own `--tmpfs /tmp` mounts
+  `noexec` by default, so this is CONTAINED there and ESCAPED on any profile
+  that leaves `/tmp` on the default writable-and-executable container
+  rootfs) and `proc-memfd-exec` (fileless execution via `memfd_create` +
+  exec-from-fd — the payload lives in no mount at all, so no filesystem
+  `noexec` policy can see it, let alone stop it; an honest red that survives
+  every Docker profile in the corpus, `fs-tmp-exec`'s own fix included).
+  Ground truth 94 → **100 checks** (31 → 33 ground-truthed techniques,
+  45 → 47 total), all passing against real Docker.
 
 ### Fixed
 - `integrity-failopen-retry` was a false CONTAINED: the `failopen-wrapper` profile

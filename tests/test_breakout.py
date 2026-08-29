@@ -9,12 +9,13 @@ import sys
 import tempfile
 import time
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import breakout
 from breakout import corpus, reporting, runner, scoring
 from breakout.canary import Canary
-from breakout.sandboxes import load_profile, builtin_dir, render_docker_args
+from breakout.sandboxes import load_profile, builtin_dir, find_profile, render_docker_args
 
 
 class CanaryTest(unittest.TestCase):
@@ -124,6 +125,55 @@ class OracleTest(unittest.TestCase):
         c.stop()
 
 
+class RepeatTest(unittest.TestCase):
+    def test_aggregate_marks_flaky_on_mixed_repeats(self):
+        results = [runner.ProbeResult(context="p", passed=True),
+                   runner.ProbeResult(context="p", passed=False)]
+        agg = runner._aggregate(results)
+        self.assertTrue(agg.passed)      # an escape on any repeat still counts
+        self.assertTrue(agg.flaky)
+        self.assertEqual(agg.repeats, 2)
+
+    def test_aggregate_not_flaky_when_consistent(self):
+        results = [runner.ProbeResult(context="p", passed=True),
+                   runner.ProbeResult(context="p", passed=True)]
+        agg = runner._aggregate(results)
+        self.assertFalse(agg.flaky)
+        self.assertEqual(agg.repeats, 2)
+
+    def test_aggregate_single_repeat_matches_bare_result(self):
+        # repeat=1 must be indistinguishable from the old unrepeated call
+        bare = runner.ProbeResult(context="p", passed=True, output="hi",
+                                  command=["sh"], exit_code=0, duration=0.5)
+        agg = runner._aggregate([bare])
+        self.assertEqual(agg.passed, bare.passed)
+        self.assertEqual(agg.output, bare.output)
+        self.assertEqual(agg.command, bare.command)
+        self.assertFalse(agg.flaky)
+
+    def test_check_preconditions_honors_bins_available(self):
+        # regression guard: _probe_repeated used to read a module-level cache
+        # that was never populated, so "missing binaries" was silently always
+        # true regardless of what the context actually had available.
+        tech = next(x for x in corpus.load_dir(corpus.default_dir())
+                    if x.id == "ipc-fd-passing")
+        ctx = runner.RunContext(name="x", kind="none", argv=[], canary_host="h",
+                                canary_port=1, decoy_dir="/d", ipv6=False, abstract=False)
+        self.assertIn("missing binaries: python3",
+                      runner.check_preconditions(tech, ctx, set()))
+        self.assertIsNone(runner.check_preconditions(tech, ctx, {"python3"}))
+
+    def test_probe_repeated_skips_every_repeat_when_context_unavailable(self):
+        tech = next(x for x in corpus.load_dir(corpus.default_dir())
+                    if x.id == "ipc-fd-passing")
+        ctx = runner.RunContext(name="x", kind="custom", argv=[], canary_host="h",
+                                canary_port=1, decoy_dir="/d", ipv6=False, abstract=False,
+                                unavailable="boom")
+        agg = runner._probe_repeated(tech, ctx, None, 5, 3, set())
+        self.assertTrue(agg.skipped)
+        self.assertEqual(agg.skip_reason, "profile unavailable: boom")
+
+
 class ScoringTest(unittest.TestCase):
     def _mk(self, passed, skipped=False):
         return runner.ProbeResult(context="p", passed=passed, skipped=skipped)
@@ -222,6 +272,19 @@ class ProfilesTest(unittest.TestCase):
         self.assertNotIn("host.docker.internal:host-gateway", argv)
         argv = render_docker_args({"network": "bridge"}, "/tmp/d")
         self.assertIn("host.docker.internal:host-gateway", argv)
+
+    def test_docker_render_runtime_flag(self):
+        argv = render_docker_args({"network": "none", "runtime": "runsc"}, "/tmp/d")
+        self.assertIn("--runtime", argv)
+        self.assertEqual(argv[argv.index("--runtime") + 1], "runsc")
+        argv = render_docker_args({"network": "none"}, "/tmp/d")
+        self.assertNotIn("--runtime", argv)
+
+    def test_gvisor_and_kata_profiles_parse_with_runtime(self):
+        gvisor = find_profile("gvisor-strict")
+        self.assertEqual(gvisor.docker.get("runtime"), "runsc")
+        kata = find_profile("kata-strict")
+        self.assertEqual(kata.docker.get("runtime"), "kata-runtime")
 
 
 def kernel_landlock_abi():
@@ -350,6 +413,12 @@ class ReportingTest(unittest.TestCase):
             sarif = json.loads((Path(d) / "report.sarif").read_text())
             self.assertEqual(sarif["version"], "2.1.0")
             self.assertEqual(sarif["runs"][0]["results"][0]["level"], "error")
+            junit = (Path(d) / "report.junit.xml").read_text(encoding="utf-8")
+            root = ET.fromstring(junit)
+            suite = root.find("testsuite")
+            self.assertEqual(suite.get("name"), "p")
+            self.assertEqual(suite.get("failures"), "1")
+            self.assertIsNotNone(suite.find("testcase/failure"))
             data = reporting.leaderboard([str(Path(d) / "report.json")],
                                          Path(d) / "lb.html", Path(d) / "lb.json")
             self.assertEqual(len(data["rows"]), 1)

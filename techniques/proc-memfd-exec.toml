@@ -1,0 +1,31 @@
+id = "proc-memfd-exec"
+name = "Fileless execution via memfd_create"
+category = "proc"
+description = "Writes a payload into an anonymous memory-backed file (memfd_create) and executes it through /proc/self/fd/N. The file lives in no mount at all, so no filesystem-level noexec, read-only rootfs, or path allowlist can see it, let alone block it — a mount option that stops fs-tmp-exec does nothing here. Blocking this needs a seccomp profile that restricts memfd_create or execve-from-fd; Docker's default seccomp profile does not, so this is an honest red on every Docker profile in the corpus."
+references = [
+  "memfd_create(2): anonymous, unlinked, mount-independent file",
+  "MITRE ATT&CK T1620 — Reflective Code Loading",
+]
+
+probe = '''
+python3 -c "
+import ctypes, os, sys
+libc = ctypes.CDLL(None, use_errno=True)
+memfd_create = getattr(libc, 'memfd_create', None)
+if memfd_create is None:
+    sys.exit(0)
+fd = memfd_create(b'x', 0)
+if fd < 0:
+    sys.exit(0)
+os.write(fd, b'#!/bin/sh\\necho ESCAPED\\n')
+os.fchmod(fd, 0o700)
+try:
+    os.execv('/proc/self/fd/' + str(fd), ['x'])
+except OSError:
+    sys.exit(0)
+"
+'''
+
+[preconditions]
+bins = ["python3"]
+oracle = "stdout"

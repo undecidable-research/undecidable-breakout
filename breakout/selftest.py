@@ -74,6 +74,15 @@ GROUND_TRUTH = {
     # there is no baseline: mounted => escape, absent => contained.
     "ipc-docker-sock":           {"airgap": "C", "wide-open": "C", "docker-tight": "C",
                                   "sock-exposed": "E"},
+
+    # --- v0.4 corpus additions, verdicts known by construction ---
+    # docker-tight's own `--tmpfs /tmp` mounts noexec by default; airgap/wide-open
+    # leave /tmp on the default (writable, executable) container rootfs.
+    "fs-tmp-exec":                {"airgap": "E", "wide-open": "E", "docker-tight": "C"},
+    # memfd_create is unaffected by any mount option, including docker-tight's own
+    # tmpfs-noexec fix for fs-tmp-exec above: an honest red, Docker's default
+    # seccomp profile does not restrict it.
+    "proc-memfd-exec":            {"airgap": "E", "wide-open": "E", "docker-tight": "E"},
 }
 
 _CODES = {"C": "CONTAINED", "E": "ESCAPED", "K": "SKIPPED"}
