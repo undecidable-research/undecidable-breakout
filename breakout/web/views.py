@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode
 
 from .. import __version__, corpus, scoring
+from .jobs import RunManager
 from ..reporting import _DISCLAIMER, _evidence, _rings, _tier
 from ..runner import DECOY_ENV_VAR
 from ..sandboxes import (builtin_dir, docker_available, host_os_key, load_profile,
@@ -68,6 +69,7 @@ CODES = {"C": "CONTAINED", "E": "ESCAPED", "K": "SKIPPED"}
 NAV = (("overview", "/"), ("leaderboard", "/leaderboard"), ("corpus", "/techniques"),
        ("profiles", "/profiles"), ("reports", "/reports"), ("diff", "/diff"),
        ("compose", "/compose"), ("agents", "/agents"))
+NAV_RUNS = ("runs", "/runs")  # inserted before "agents" when --allow-runs is on
 
 # One list feeds /api, /openapi.json, /llms.txt and the agents page.
 ENDPOINTS = (
@@ -96,6 +98,10 @@ ENDPOINTS = (
       "out": "output directory"}),
     ("/doctor", "What this host can run: docker, bwrap, cc, availability of every "
                 "builtin profile.", {}),
+    ("/runs", "Run history and the submit contract (POST /api/runs). Present always; "
+              "runs execute only when the server was started with --allow-runs on a "
+              "loopback bind.", {}),
+    ("/runs/{id}", "One run: status, command, exit code, output tail, report link.", {}),
 )
 
 
@@ -193,7 +199,8 @@ class Reports:
 
 
 class Site:
-    def __init__(self, reports_dir="reports", techniques_dir=None, leaderboard_json=None):
+    def __init__(self, reports_dir="reports", techniques_dir=None, leaderboard_json=None,
+                 allow_runs=False):
         self.reports = Reports(reports_dir)
         self.techniques_dir = Path(techniques_dir) if techniques_dir else corpus.default_dir()
         if leaderboard_json is None:
@@ -202,6 +209,7 @@ class Site:
         self.leaderboard_json = Path(leaderboard_json) if leaderboard_json else None
         self._doctor = (0.0, None)
         self._doctor_lock = threading.Lock()
+        self.runs = RunManager(self.reports.root, enabled=allow_runs)
 
     def techniques(self):
         return corpus.load_dir(self.techniques_dir)
@@ -1105,12 +1113,15 @@ def diff(site, req):
     return Page("diff", "diff", "".join(b), data)
 
 
-def compose(site, req):
+def build_run(site, req, default_profiles=True):
+    """Validate run parameters and build the `breakout run` argv. Single source of
+    truth for both /compose (shows the command) and POST /api/runs (executes it),
+    so the two can never disagree on what a given request means."""
     profiles = site.profiles()
     slugs = [p.slug for p in profiles]
     techs = site.techniques()
     tids = {t.id for t in techs}
-    fresh = not [k for k in req.query if k != "format"]
+    fresh = default_profiles and not [k for k in req.query if k != "format"]
     sel_p = ["docker-loose", "docker-tight"] if fresh else req.many("profile")
     sel_c = req.many("category")
     only = req.many("only")
@@ -1136,32 +1147,55 @@ def compose(site, req):
     if re.search(r"[\x00-\x1f]", out):
         errors.append("out must be a plain path")
 
-    argv = [*CLI, "run"]
-    for p in sel_p:
-        argv += ["--profile", p]
-    if sel_c:
-        argv += ["--categories", ",".join(sel_c)]
-    if only:
-        argv += ["--only", ",".join(only)]
-    if repeat not in ("", "1"):
-        argv += ["--repeat", repeat]
-    if timeout not in ("", "20"):
-        argv += ["--timeout", timeout]
-    if baseline != "auto":
-        argv += ["--baseline", baseline]
-    argv += ["--out", out]
+    def argv_with(out_value, cli=None):
+        a = [*(cli or CLI), "run"]
+        for p in sel_p:
+            a += ["--profile", p]
+        if sel_c:
+            a += ["--categories", ",".join(sel_c)]
+        if only:
+            a += ["--only", ",".join(only)]
+        if repeat not in ("", "1"):
+            a += ["--repeat", repeat]
+        if timeout not in ("", "20"):
+            a += ["--timeout", timeout]
+        if baseline != "auto":
+            a += ["--baseline", baseline]
+        return a + ["--out", out_value]
+
+    argv = argv_with(out)
     ok = not errors
     doc = site.doctor()
     unavailable = {p: doc["profiles"][p]["reason"] for p in sel_p
                    if p in doc["profiles"] and not doc["profiles"][p]["available"]}
     report = out.rstrip("/") + "/report.json"
-    data = {"valid": ok, "errors": errors, "argv": argv if ok else None,
+    return {"valid": ok, "errors": errors, "argv": argv if ok else None,
             "command": shlex.join(argv) if ok else None,
             "then": [_cmd("score", report), _cmd("serve", "--reports", out)] if ok else [],
             "unavailable_here": unavailable,
             "external_traffic": (not sel_c or "net" in sel_c) and not only,
-            "note": "the frontend never executes probes: run the command yourself, on a "
-                    "system you own or are authorized to test"}
+            "selection": {"profiles": sel_p, "categories": sel_c, "only": only,
+                          "repeat": repeat, "timeout": timeout, "baseline": baseline,
+                          "out": out},
+            "_argv_with": argv_with,
+            "note": "the frontend never executes probes unless started with "
+                    "--allow-runs on a loopback bind; otherwise run the command "
+                    "yourself, on a system you own or are authorized to test"}
+
+
+def compose(site, req):
+    profiles = site.profiles()
+    techs = site.techniques()
+    plan = build_run(site, req)
+    sel = plan["selection"]
+    sel_p, sel_c, only = sel["profiles"], sel["categories"], sel["only"]
+    repeat, timeout, baseline, out = (sel["repeat"], sel["timeout"], sel["baseline"],
+                                      sel["out"])
+    errors, ok, unavailable = plan["errors"], plan["valid"], plan["unavailable_here"]
+    doc = site.doctor()
+    runs_on = site.runs.enabled
+    data = {k: v for k, v in plan.items() if not k.startswith("_") and k != "selection"}
+    data["runnable_here"] = runs_on
 
     datalist = "".join(f"<option value='{esc(t.id)}'>" for t in techs)
     b = [_head("compose", "write the run",
@@ -1212,7 +1246,116 @@ def compose(site, req):
              "The net class makes constant, data-free lookups to public resolvers; on a "
              "monitored network they look like DNS/ICMP tunneling. Pick fs, proc, ipc "
              "to stay local.</p></div>")
+    if runs_on:
+        b.append(_h2("run on this host", "<a href='/runs'>run history →</a>"))
+        b.append("<p class='prose'>This server was started with <code>--allow-runs</code> "
+                 "on a loopback bind, so it can execute the composed command here and "
+                 "write the report into the served directory. Only the validated "
+                 "parameters above are run, never a free-form command.</p>"
+                 "<button class='btn primary' type='button' data-run"
+                 f"{'' if ok else ' disabled'}>run here</button>"
+                 "<div data-run-out aria-live='polite'></div>")
+    else:
+        b.append(_h2("run on this host"))
+        b.append("<p class='prose'>This server is read-only: it composes the command and "
+                 "never executes a probe. To run here, start it with "
+                 "<code>breakout serve --allow-runs</code> on a loopback bind "
+                 "(<code>--host 127.0.0.1</code>); it refuses <code>--allow-runs</code> on "
+                 "any other interface.</p>")
     return Page("compose", "compose", "".join(b), data)
+
+
+_RUN_STATUS_PILL = {"queued": "SKIPPED", "running": "CONTAINED", "done": "CONTAINED",
+                    "failed": "ESCAPED", "error": "ESCAPED"}
+
+
+def submit_run(site, req):
+    """Validate and enqueue a run. Returns (data, status). Used by POST /api/runs."""
+    if not site.runs.enabled:
+        return ({"error": "runs are disabled: start with `breakout serve --allow-runs` "
+                          "on a loopback bind (--host 127.0.0.1)", "status": 403}, 403)
+    plan = build_run(site, req, default_profiles=False)
+    if not plan["valid"]:
+        return ({"error": "invalid run parameters", "errors": plan["errors"],
+                 "status": 400}, 400)
+    rec, err = site.runs.submit(plan)
+    if err:
+        return ({"error": err, "status": 409}, 409)
+    rec["url"] = f"/runs/{rec['id']}"
+    rec["api"] = f"/api/runs/{rec['id']}"
+    return (rec, 202)
+
+
+def runs_page(site, req):
+    runs = site.runs.list()
+    data = {"enabled": site.runs.enabled, "count": len(runs), "runs": runs,
+            "submit": {"method": "POST", "path": "/api/runs",
+                       "body": "same parameters as /compose (profile, category, only, "
+                               "repeat, timeout, baseline), as form or JSON"},
+            "note": "runs execute `breakout run` on this host, one at a time, from the "
+                    "validated parameters only; output lands under the served reports "
+                    "directory"}
+    b = [_head("runs", "run on this host",
+               meta=("enabled · loopback only · one at a time" if site.runs.enabled
+                     else "disabled · read-only server"))]
+    if not site.runs.enabled:
+        b.append("<p class='prose'>This server is read-only. Start it with "
+                 "<code>breakout serve --allow-runs</code> on a loopback bind to execute "
+                 "runs from <a href='/compose'>compose</a>. It refuses "
+                 "<code>--allow-runs</code> on any non-loopback interface, so a shared "
+                 "or preview deployment can never run probes.</p>")
+        return Page("runs", "runs", "".join(b), data)
+    b.append("<p class='prose'>Compose a run and press <b>run here</b>, or POST the same "
+             "parameters to <code>/api/runs</code>. Each run executes "
+             "<code>breakout run</code> from the validated parameters only and writes "
+             "its report under the served directory, where it appears in "
+             "<a href='/reports'>reports</a>.</p>")
+    b.append(_h2("history", f"{len(runs)} runs"))
+    if not runs:
+        b.append(_empty("No run yet. <a href='/compose'>Compose one</a> and run it here."))
+        return Page("runs", "runs", "".join(b), data)
+    b.append("<div class='scroll'><table><thead><tr><th scope='col'>run</th>"
+             "<th scope='col'>status</th><th scope='col'>command</th>"
+             "<th scope='col'>report</th><th scope='col'>started</th></tr></thead><tbody>")
+    for r in runs:
+        rep = (f"<a href='/reports/{_qp(r['report'])}'>report</a>"
+               if r["status"] == "done" else "<span class='note'>—</span>")
+        b.append(f"<tr data-row data-run='{esc(r['id'])}' data-status='{esc(r['status'])}'>"
+                 f"<th scope='row'><a class='tname' href='/runs/{esc(r['id'])}'>"
+                 f"{esc(r['id'])}</a></th>"
+                 f"<td>{_pill(_RUN_STATUS_PILL.get(r['status'], 'SKIPPED'), True)} "
+                 f"<span class='note'>{esc(r['status'])}</span></td>"
+                 f"<td class='note'><code>{esc(r['command'])}</code></td>"
+                 f"<td>{rep}</td><td class='note'>{esc(_when(r['started']))}</td></tr>")
+    b.append("</tbody></table></div>")
+    return Page("runs", "runs", "".join(b), data)
+
+
+def run_detail(site, req, rid):
+    rec = site.runs.get(rid)
+    if rec is None:
+        raise NotFound(f"no run '{rid}'")
+    rec["url"] = f"/runs/{rid}"
+    rec["report_url"] = (f"/reports/{rec['report']}" if rec["status"] == "done" else None)
+    b = [_crumbs(("runs", "/runs"), (rid, None)),
+         _head("run", esc(rid), plain=True, rings=False,
+               meta=f"{esc(rec['status'])} · exit {esc(rec['exit_code'])} · "
+                    f"started {esc(_when(rec['started']))}"),
+         _facts([("status", f"{_pill(_RUN_STATUS_PILL.get(rec['status'], 'SKIPPED'), True)} "
+                            f"{esc(rec['status'])}"),
+                 ("command", f"<code>{esc(rec['command'])}</code>"),
+                 ("out", esc(rec["out"])),
+                 ("report", f"<a href='/reports/{_qp(rec['report'])}'>{esc(rec['report'])}</a>"
+                  if rec["status"] == "done" else "written when the run finishes"),
+                 ("exit code", esc(rec["exit_code"]))])]
+    if rec["error"]:
+        b.append(f"<p class='error' role='alert'>{esc(rec['error'])}</p>")
+    b.append(_h2("output", "tail"))
+    b.append(f"<pre class='src' data-run-log>{esc(rec['log'] or '(no output yet)')}</pre>")
+    if rec["status"] in ("queued", "running"):
+        b.append("<p class='note-l' data-run-poll>Running. Reload for the latest output, "
+                 "or watch it from <a href='/runs'>run history</a>.</p>")
+    return Page(f"run {rid}", "runs", "".join(b), rec)
 
 
 def doctor_page(site, req):
@@ -1281,7 +1424,10 @@ def agents(site, req):
          "<li><b>compose</b><span>GET <code>/api/compose?profile=docker-tight&amp;category=fs</code>: "
          "validated <code>argv</code>, no shell quoting to get wrong.</span></li>"
          "<li><b>run</b><span>Execute the argv yourself, only on a system you own or are "
-         "authorized to test. The frontend refuses POST: it never runs probes.</span></li>"
+         "authorized to test. Or, when this server runs with <code>--allow-runs</code> on "
+         "a loopback bind, POST the same parameters to <a href='/api/runs'>/api/runs</a> "
+         "and poll <code>/api/runs/&lt;id&gt;</code>. Without that flag POST is refused: "
+         "the server only composes.</span></li>"
          "<li><b>read</b><span>GET <code>/api/reports/&lt;path&gt;?status=ESCAPED</code>: "
          "what got out, as flat rows.</span></li>"
          "<li><b>gate</b><span>GET <code>/api/diff?before=…&amp;after=…</code> or run "
@@ -1316,8 +1462,11 @@ def llms_txt(site):
              "This server is a read-only frontend over the corpus, the builtin profiles "
              "and the reports on disk. Every HTML page has a JSON twin: send "
              "`Accept: application/json`, add `?format=json`, or prefix the path with "
-             "`/api`. It never executes probes; /compose returns a validated argv to run "
-             "yourself, only on systems you own or are authorized to test.", "",
+             "`/api`. By default it executes nothing; /compose returns a validated argv to "
+             "run yourself, only on systems you own or are authorized to test. When "
+             "started with `--allow-runs` on a loopback bind it also accepts POST "
+             "/api/runs (the same parameters as /compose) and runs them here, one at a "
+             "time; otherwise POST is refused.", "",
              f"A high score is not a certification: {_DISCLAIMER}", "", "## Pages", ""]
     for p, d, params in ENDPOINTS:
         ps = f" Params: {'; '.join(f'{k} ({v})' for k, v in params.items())}." if params else ""
@@ -1351,6 +1500,19 @@ def openapi(site):
                                                     "content": {"application/json": {
                                                         "schema": {"type": "object"}}}},
                                             "404": {"description": "not found"}}}}
+    run_params = {k: v for p, _, params in ENDPOINTS if p == "/compose"
+                  for k, v in params.items() if k != "out"}
+    paths["/api/runs"]["post"] = {
+        "summary": "Queue a `breakout run` on this host (only when the server was "
+                   "started with --allow-runs on a loopback bind; else 403).",
+        "requestBody": {"required": True, "content": {
+            "application/json": {"schema": {"type": "object", "properties": {
+                k: {"type": "string", "description": v} for k, v in run_params.items()}}},
+            "application/x-www-form-urlencoded": {"schema": {"type": "object"}}}},
+        "responses": {"202": {"description": "run queued"},
+                      "400": {"description": "invalid parameters"},
+                      "403": {"description": "runs disabled or non-loopback caller"},
+                      "409": {"description": "too many runs pending"}}}
     return {"openapi": "3.1.0",
             "info": {"title": "undecidable-breakout frontend", "version": __version__,
                      "description": "Read-only JSON twin of every page. " + TAGLINE},
@@ -1380,6 +1542,8 @@ ROUTES = (
     (re.compile(r"/diff"), diff),
     (re.compile(r"/compose"), compose),
     (re.compile(r"/doctor"), doctor_page),
+    (re.compile(r"/runs"), runs_page),
+    (re.compile(r"/runs/(?P<rid>[0-9A-Za-z._-]{1,64})"), run_detail),
     (re.compile(r"/agents"), agents),
 )
 
@@ -1396,10 +1560,13 @@ def route(site, path, query):
     return not_found(f"no page at {path}")
 
 
-def layout(page, path, query_string):
+def layout(page, path, query_string, show_runs=False):
+    items = list(NAV)
+    if show_runs:
+        items.insert(len(items) - 1, NAV_RUNS)  # before "agents"
     cur = " aria-current='page'"
     nav = "".join(f"<li><a href='{h}'{cur if page.nav == k else ''}>{k}</a></li>"
-                  for k, h in NAV)
+                  for k, h in items)
     sep = "&" if query_string else ""
     json_href = f"{path}?{query_string}{sep}format=json"
     desc = page.description or TAGLINE

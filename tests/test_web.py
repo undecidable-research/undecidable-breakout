@@ -4,6 +4,7 @@ import json
 import re
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -197,6 +198,105 @@ class RunOnlyFlagTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             cli.main(["run", "--profile", "none", "--only", "no-such-technique"])
         self.assertIn("unknown technique ids", str(cm.exception.code))
+
+
+class AllowRunsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_disabled_by_default_post_is_refused(self):
+        site = Site(self.tmp.name)
+        self.assertFalse(site.runs.enabled)
+        srv = make_server(site, "127.0.0.1", 0)
+        t = threading.Thread(target=srv.serve_forever, daemon=True)
+        t.start()
+        try:
+            base = f"http://127.0.0.1:{srv.server_address[1]}"
+            req = urllib.request.Request(base + "/api/runs", data=b"profile=none",
+                                         method="POST",
+                                         headers={"Content-Type": "application/x-www-form-urlencoded"})
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req, timeout=5)
+            self.assertEqual(cm.exception.code, 403)
+            # the page and nav never offer runs when disabled
+            html = urllib.request.urlopen(base + "/compose", timeout=5).read().decode()
+            self.assertNotIn("data-run", html)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_serve_refuses_allow_runs_on_non_loopback(self):
+        from breakout.web import server
+        with self.assertRaises(SystemExit) as cm:
+            server.serve(host="0.0.0.0", port=0, reports_dir=self.tmp.name, allow_runs=True)
+        self.assertIn("non-loopback", str(cm.exception.code))
+
+    def test_write_methods_refused_even_with_runs(self):
+        site = Site(self.tmp.name, allow_runs=True)
+        srv = make_server(site, "127.0.0.1", 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            base = f"http://127.0.0.1:{srv.server_address[1]}"
+            for method in ("PUT", "DELETE", "PATCH"):
+                req = urllib.request.Request(base + "/api/runs", data=b"x", method=method)
+                with self.assertRaises(urllib.error.HTTPError) as cm:
+                    urllib.request.urlopen(req, timeout=5)
+                self.assertEqual(cm.exception.code, 405, method)
+            # POST to a path other than /api/runs is still refused
+            req = urllib.request.Request(base + "/compose", data=b"x", method="POST")
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req, timeout=5)
+            self.assertEqual(cm.exception.code, 405)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_run_executes_and_lands_in_reports(self):
+        site = Site(self.tmp.name, allow_runs=True)
+        srv = make_server(site, "127.0.0.1", 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+            def post_json(body):
+                req = urllib.request.Request(
+                    base + "/api/runs", data=json.dumps(body).encode(), method="POST",
+                    headers={"Content-Type": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        return r.status, json.loads(r.read())
+                except urllib.error.HTTPError as e:
+                    return e.code, json.loads(e.read())
+
+            code, bad = post_json({"profile": "nope"})
+            self.assertEqual(code, 400)
+            self.assertTrue(bad["errors"])
+
+            # a fast, host-only run that needs no Docker
+            code, rec = post_json({"profile": "none",
+                                   "only": "integrity-no-sandbox-indicator"})
+            self.assertEqual(code, 202)
+            self.assertEqual(rec["status"], "queued")
+            self.assertNotIn("reports/", rec["out"].split("/")[0])  # forced under ui-runs
+            self.assertTrue(rec["out"].startswith("ui-runs/"))
+
+            rid = rec["id"]
+            for _ in range(120):
+                final = json.loads(urllib.request.urlopen(
+                    base + f"/api/runs/{rid}", timeout=5).read())
+                if final["status"] in ("done", "failed", "error"):
+                    break
+                time.sleep(0.5)
+            self.assertEqual(final["status"], "done", final)
+            self.assertEqual(final["exit_code"], 0)
+            # the produced report is now served and listed
+            self.assertTrue((Path(self.tmp.name) / "ui-runs" / rid / "report.json").is_file())
+            listing = json.loads(urllib.request.urlopen(base + "/api/runs", timeout=5).read())
+            self.assertIn(rid, [r["id"] for r in listing["runs"]])
+        finally:
+            srv.shutdown()
+            srv.server_close()
 
 
 if __name__ == "__main__":

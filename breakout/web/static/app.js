@@ -112,5 +112,57 @@
     compose.addEventListener("input", refresh);
     compose.addEventListener("change", refresh);
     compose.addEventListener("submit", (e) => { e.preventDefault(); refresh(); });
+
+    // run-here button (only present when the server was started with --allow-runs)
+    const runBtn = d.querySelector("[data-run]");
+    const runOut = d.querySelector("[data-run-out]");
+    if (runBtn && runOut) {
+      let polling = null;
+      const fmt = (r) => `run ${r.id} — ${r.status}`
+        + (r.exit_code != null ? ` (exit ${r.exit_code})` : "");
+      const render = (r) => {
+        const done = ["done", "failed", "error"].includes(r.status);
+        const link = (r.status === "done")
+          ? ` · <a href="/reports/${r.report}">report</a>` : "";
+        runOut.innerHTML = `<p class="note-l"><a href="/runs/${r.id}">${fmt(r)}</a>${link}</p>`
+          + `<pre class="src">${(r.log || "(starting…)").replace(/[&<>]/g,
+              (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</pre>`;
+        return done;
+      };
+      const poll = (id) => {
+        clearInterval(polling);
+        polling = setInterval(async () => {
+          try {
+            const r = await (await fetch(`/api/runs/${id}`,
+              { headers: { Accept: "application/json" } })).json();
+            if (render(r)) clearInterval(polling);
+          } catch { clearInterval(polling); }
+        }, 1000);
+      };
+      runBtn.addEventListener("click", async () => {
+        runBtn.disabled = true;
+        const prev = runBtn.textContent;
+        runBtn.textContent = "running…";
+        try {
+          const r = await fetch("/api/runs", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(new FormData(compose)),
+          });
+          const j = await r.json();
+          if (!r.ok) {
+            runOut.innerHTML = `<p class="error">${(j.errors || [j.error]).join("; ")}</p>`;
+          } else {
+            render(j);
+            poll(j.id);
+          }
+        } catch (e) {
+          runOut.innerHTML = `<p class="error">${e}</p>`;
+        } finally {
+          runBtn.disabled = false;
+          runBtn.textContent = prev;
+        }
+      });
+    }
   }
 })();

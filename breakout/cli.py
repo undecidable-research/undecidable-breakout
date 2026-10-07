@@ -144,7 +144,8 @@ def cmd_verify(args):
 def cmd_serve(args):
     from . import web
     web.serve(host=args.host, port=args.port, reports_dir=args.reports,
-              techniques_dir=args.techniques_dir, leaderboard_json=args.leaderboard)
+              techniques_dir=args.techniques_dir, leaderboard_json=args.leaderboard,
+              allow_runs=args.allow_runs)
 
 
 def cmd_selftest(args):
@@ -213,6 +214,10 @@ def main(argv=None):
     p.add_argument("--leaderboard", default=None,
                    help="CI leaderboard JSON (default: docs/leaderboard/index.json "
                         "when running from a checkout)")
+    p.add_argument("--allow-runs", action="store_true",
+                   help="let the UI execute `breakout run` on this host (POST /api/runs); "
+                        "refused unless bound to a loopback address. Off by default: the "
+                        "server is read-only and only composes commands.")
     p.add_argument("--techniques-dir")
     p.set_defaults(fn=cmd_serve)
 

@@ -14,6 +14,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import views
 
+LOOPBACK = {"127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"}
+MAX_BODY = 64 * 1024
+
 STATIC = Path(__file__).with_name("static")
 FONT = Path(__file__).resolve().parent.parent / "reporting" / "archivo-latin-wght-normal.woff2"
 
@@ -116,7 +119,7 @@ def handle(site, raw_path, accept=""):
                      {"Link": f'<{html_url}>; rel="alternate"; type="text/html"',
                       "Vary": "Accept"})
     qs = "&".join(p for p in url.query.split("&") if p and not p.startswith("format="))
-    html = views.layout(page, page_path, qs)
+    html = views.layout(page, page_path, qs, show_runs=site.runs.enabled)
     return Response(page.status, "text/html; charset=utf-8", html.encode(), {
         "Cache-Control": "no-store", "Vary": "Accept",
         "Content-Security-Policy": PAGE_CSP,
@@ -155,16 +158,55 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self._get(False)
 
+    def do_POST(self):
+        path = unquote(urlsplit(self.path).path).rstrip("/") or "/"
+        if path not in ("/api/runs", "/runs"):
+            return self._refuse()
+        if self.client_address[0] not in LOOPBACK:
+            return self._reply(_json(403, {
+                "error": "runs accepted from loopback only", "status": 403}))
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > MAX_BODY:
+                return self._reply(_json(413, {"error": "body too large", "status": 413}))
+            body = self.rfile.read(n) if n else b""
+            query = _parse_body(body, self.headers.get("Content-Type", ""))
+            data, status = views.submit_run(self.site, views.Req(path=path, query=query))
+        except Exception:
+            traceback.print_exc()
+            data, status = {"error": "internal error; see the server log", "status": 500}, 500
+        self._reply(_json(status, data))
+
     def _refuse(self):
         self._reply(_json(405, {
-            "error": "read-only: this frontend never executes probes. "
-                     "GET /api/compose for the argv, then run it yourself.",
+            "error": "read-only: this frontend composes commands. POST /api/runs is "
+                     "accepted only when started with --allow-runs on a loopback bind; "
+                     "otherwise GET /api/compose for the argv and run it yourself.",
             "status": 405, "allow": ["GET", "HEAD"]}, {"Allow": "GET, HEAD"}))
 
-    do_POST = do_PUT = do_PATCH = do_DELETE = _refuse
+    do_PUT = do_PATCH = do_DELETE = _refuse
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"serve: {self.address_string()} {fmt % args}\n")
+
+
+def _parse_body(body, content_type):
+    """POST body -> the same {name: [values]} shape parse_qs produces, so a run
+    submission reuses the Req/validation path. JSON and form-encoded only."""
+    text = body.decode("utf-8", "replace")
+    if "application/json" in content_type.lower():
+        obj = json.loads(text or "{}")
+        if not isinstance(obj, dict):
+            raise ValueError("JSON body must be an object")
+        out = {}
+        for k, v in obj.items():
+            out[str(k)] = [str(x) for x in v] if isinstance(v, list) else [str(v)]
+        return out
+    return parse_qs(text, keep_blank_values=True)
+
+
+def _loopback_only(host):
+    return host in LOOPBACK
 
 
 def make_server(site, host="127.0.0.1", port=8000):
@@ -175,12 +217,17 @@ def make_server(site, host="127.0.0.1", port=8000):
 
 
 def serve(host="127.0.0.1", port=8000, reports_dir="reports", techniques_dir=None,
-          leaderboard_json=None):
-    site = views.Site(reports_dir, techniques_dir, leaderboard_json)
+          leaderboard_json=None, allow_runs=False):
+    if allow_runs and not _loopback_only(host):
+        sys.exit(f"refusing --allow-runs on a non-loopback bind ({host}): runs execute "
+                 f"escape techniques on this host. Bind to 127.0.0.1 (the default) to "
+                 f"enable runs, or drop --allow-runs.")
+    site = views.Site(reports_dir, techniques_dir, leaderboard_json, allow_runs=allow_runs)
     srv = make_server(site, host, port)
     shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    mode = "runs enabled (loopback)" if allow_runs else "read-only"
     print(f"undecidable-breakout frontend: http://{shown}:{srv.server_address[1]}/  "
-          f"(reports: {site.reports.root}, read-only)", flush=True)
+          f"(reports: {site.reports.root}, {mode})", flush=True)
     if host not in ("127.0.0.1", "localhost", "::1"):
         print(f"  note: bound to {host}; anyone who can reach this port can read "
               f"the reports", flush=True)

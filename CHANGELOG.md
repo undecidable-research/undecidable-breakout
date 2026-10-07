@@ -15,9 +15,16 @@ twin for agents.
   reports with live filters, diff between two reports, a command composer, and a
   host doctor page. Every page has a JSON twin (`Accept: application/json`,
   `?format=json`, or `/api/<path>`), plus `/llms.txt`, `/openapi.json` and an
-  `/agents` page, so agents read the same facts people see. GET/HEAD only: it
-  composes commands and never runs a probe. Report artifacts are served only from
-  inside the reports directory, under a strict CSP.
+  `/agents` page, so agents read the same facts people see. GET/HEAD only by
+  default: it composes commands and never runs a probe. Report artifacts are served
+  only from inside the reports directory, under a strict CSP.
+- `serve --allow-runs`: an opt-in localhost mode that lets the UI execute the
+  composed run on this host via `POST /api/runs` (same validated parameters as
+  `/compose`, one run at a time, output written under the served directory and shown
+  at `/runs` and `/runs/<id>`). Only the validated argv is run, never a free-form
+  command; the endpoint accepts loopback callers only and is capped at four pending
+  runs. The server refuses `--allow-runs` on any non-loopback bind, so a shared or
+  preview deployment can never enable it; without the flag `POST` stays a 405.
 - `--only ID[,ID...]` on `breakout run`: run just these technique ids (unknown ids
   fail before anything runs). Wires the CLI to the runner's existing `tech_ids`.
 - `--repeat N` on `breakout run`: repeats each probe N times and marks a

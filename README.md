@@ -231,10 +231,17 @@ A read-only web UI over the corpus, the builtin profiles and every `report.json`
   `/llms.txt`, `/openapi.json` and `/agents` describe the interface; rows carry
   `data-technique`, `data-profile` and `data-status` for agents that drive a browser,
   and every filter is a plain GET URL.
-- **Never executes.** The server answers GET and HEAD only. `/compose` validates
+- **Read-only by default.** The server answers GET and HEAD only. `/compose` validates
   parameters and returns the `argv` to run; you run it, on a system you own or are
   authorized to test. It binds to `127.0.0.1` by default: anyone who can reach the port
   can read the reports.
+- **Optional local runs.** `serve --allow-runs` lets the UI execute the composed run
+  on this host via `POST /api/runs` (same parameters as `/compose`, one run at a time,
+  output written under the served directory and shown at `/runs`). Only the validated
+  parameters are run, never a free-form command, and the run endpoint accepts loopback
+  callers only. The server **refuses `--allow-runs` on any non-loopback bind**, so a
+  shared or preview deployment can never turn probes on. Without the flag, `POST` is
+  refused.
 
 ## Profiles
 
