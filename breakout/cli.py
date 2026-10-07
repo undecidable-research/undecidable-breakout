@@ -1,4 +1,4 @@
-"""CLI: run, list, score, diff, leaderboard, verify, doctor."""
+"""CLI: run, list, score, diff, leaderboard, verify, doctor, serve."""
 import argparse
 import json
 import platform
@@ -32,8 +32,14 @@ def cmd_run(args):
         bad = [c for c in cats if c not in corpus.CATEGORIES]
         if bad:
             sys.exit(f"unknown categories: {', '.join(bad)}. Valid: {', '.join(corpus.CATEGORIES)}")
+    only = [t for t in args.only.split(",") if t] or None
+    if only:
+        known = {t.id for t in techs}
+        bad = [t for t in only if t not in known]
+        if bad:
+            sys.exit(f"unknown technique ids: {', '.join(bad)}. See `breakout list`.")
     profiles = [find_profile(slug) for slug in args.profile]
-    report = runner.run(profiles, techs, categories=cats, out_dir=args.out,
+    report = runner.run(profiles, techs, categories=cats, tech_ids=only, out_dir=args.out,
                         timeout=args.timeout, baseline_mode=args.baseline,
                         repeat=args.repeat)
     print()
@@ -135,6 +141,12 @@ def cmd_verify(args):
           f"ipv6={canary.info()['ipv6']}, decoys in {decoy}")
 
 
+def cmd_serve(args):
+    from . import web
+    web.serve(host=args.host, port=args.port, reports_dir=args.reports,
+              techniques_dir=args.techniques_dir, leaderboard_json=args.leaderboard)
+
+
 def cmd_selftest(args):
     from . import selftest
     sys.exit(0 if selftest.run(out_dir=args.out, timeout=args.timeout) else 1)
@@ -151,6 +163,8 @@ def main(argv=None):
     p.add_argument("--profile", action="append", required=True,
                    help="profile slug or path (repeatable)")
     p.add_argument("--categories", default="", help="comma-separated: net,fs,proc,ipc,integrity")
+    p.add_argument("--only", default="",
+                   help="comma-separated technique ids: run only these (see `list`)")
     p.add_argument("--out", default="reports")
     p.add_argument("--timeout", type=int, default=20, help="per-probe timeout seconds")
     p.add_argument("--techniques-dir")
@@ -188,6 +202,19 @@ def main(argv=None):
     p = sub.add_parser("verify", help="self-check: corpus, canary roundtrip, decoys, profiles")
     p.add_argument("--techniques-dir")
     p.set_defaults(fn=cmd_verify)
+
+    p = sub.add_parser("serve",
+                       help="read-only web frontend over the corpus, profiles and "
+                            "reports; every page has a JSON twin for agents")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--reports", default="reports",
+                   help="directory scanned for report.json files (default: reports)")
+    p.add_argument("--leaderboard", default=None,
+                   help="CI leaderboard JSON (default: docs/leaderboard/index.json "
+                        "when running from a checkout)")
+    p.add_argument("--techniques-dir")
+    p.set_defaults(fn=cmd_serve)
 
     p = sub.add_parser("selftest",
                        help="ground-truth accuracy check: profiles with known outcomes, "

@@ -177,12 +177,15 @@ breakout diff    before.json after.json                    # exit 1 on any regre
 breakout leaderboard r1.json [r2.json ...] --out out.html  # build the leaderboard page
 breakout verify                                            # harness self-check (no Docker)
 breakout selftest                                          # accuracy harness (needs Docker)
+breakout serve   [--reports DIR] [--port 8000]              # read-only web frontend + JSON API
 ```
 
 `run` options:
 
 - `--profile SLUG` — repeatable; a builtin slug or a path to a profile `.toml`.
 - `--categories net,fs,proc,ipc,integrity` — restrict the corpus (default: all).
+- `--only ID[,ID...]` — run only these technique ids (see `breakout list`); unknown ids
+  fail before anything runs.
 - `--out DIR` — where `report.json`, `report.html`, `report.sarif`, and
   `report.junit.xml` are written.
 - `--timeout SECONDS` — per-probe timeout (default 20).
@@ -207,6 +210,31 @@ breakout diff reports/report.json reports/later/report.json   # exit 1 => it got
 
 Read `reports/report.html` for the full evidence: every `ESCAPED` row carries the exact
 command that ran and the evidence it got out (a canary hit, or an `ESCAPED` stdout marker).
+
+## Frontend: for people and for agents
+
+```bash
+python -m breakout.cli serve --reports reports/      # http://127.0.0.1:8000/
+```
+
+A read-only web UI over the corpus, the builtin profiles and every `report.json` under
+`--reports`, in the same five greys and type as `report.html`. Stdlib only
+(`http.server`), no build step, works without JavaScript.
+
+- **Pages:** overview with the latest scorecards, leaderboard (CI rows and local rows),
+  corpus browser with search and class filters, one page per technique (probe source,
+  preconditions, selftest ground truth, every local verdict with evidence), one page per
+  profile (TOML, rendered launcher, what escaped it), reports, diff between two reports,
+  a command composer, and `doctor` for this host.
+- **Agents:** every page has a JSON twin with the same facts: send
+  `Accept: application/json`, add `?format=json`, or prefix the path with `/api`.
+  `/llms.txt`, `/openapi.json` and `/agents` describe the interface; rows carry
+  `data-technique`, `data-profile` and `data-status` for agents that drive a browser,
+  and every filter is a plain GET URL.
+- **Never executes.** The server answers GET and HEAD only. `/compose` validates
+  parameters and returns the `argv` to run; you run it, on a system you own or are
+  authorized to test. It binds to `127.0.0.1` by default: anyone who can reach the port
+  can read the reports.
 
 ## Profiles
 
@@ -351,7 +379,7 @@ deterministic corpus, no model anywhere) and measures the *cage*.
 ## Development
 
 ```bash
-python -m unittest discover -s tests -v   # 20 unit tests, no Docker needed
+python -m unittest discover -s tests -v   # 45 unit tests (3 skip without bwrap/cc), no Docker needed
 python -m breakout.cli verify             # self-check
 python -m breakout.cli selftest           # accuracy harness, 94/94 (needs Docker)
 ```

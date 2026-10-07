@@ -2,11 +2,24 @@
 
 ## Unreleased
 
-Correctness and honesty pass over the corpus, harness, and docs, plus four
-additions: repeatable/flaky probes, a `doctor` command, JUnit output, and
-alternate-runtime (gVisor/Kata) profiles.
+Correctness and honesty pass over the corpus, harness, and docs, plus these
+additions: repeatable/flaky probes, a `doctor` command, JUnit output,
+alternate-runtime (gVisor/Kata) profiles, and a read-only web frontend with a JSON
+twin for agents.
 
 ### Added
+- `breakout serve`: a read-only web frontend (stdlib `http.server`, no build step,
+  no JavaScript required) over the corpus, the builtin profiles and every
+  `report.json` under `--reports`, in the report's five-grey palette. Overview,
+  leaderboard (CI and local rows), corpus browser, technique and profile pages,
+  reports with live filters, diff between two reports, a command composer, and a
+  host doctor page. Every page has a JSON twin (`Accept: application/json`,
+  `?format=json`, or `/api/<path>`), plus `/llms.txt`, `/openapi.json` and an
+  `/agents` page, so agents read the same facts people see. GET/HEAD only: it
+  composes commands and never runs a probe. Report artifacts are served only from
+  inside the reports directory, under a strict CSP.
+- `--only ID[,ID...]` on `breakout run`: run just these technique ids (unknown ids
+  fail before anything runs). Wires the CLI to the runner's existing `tech_ids`.
 - `--repeat N` on `breakout run`: repeats each probe N times and marks a
   technique `flaky` in the report when it escapes on some repeats but not
   all — an escape that works once in five is still an escape, but flapping
