@@ -3,8 +3,8 @@
   "rows": [
     {
       "profile": "docker-tight",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": 90,
       "net": 100,
@@ -15,8 +15,8 @@
     },
     {
       "profile": "landlock-strict",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": 74,
       "net": 100,
@@ -27,8 +27,8 @@
     },
     {
       "profile": "docker-loose",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": 23,
       "net": 6,
@@ -39,8 +39,8 @@
     },
     {
       "profile": "none",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": 3,
       "net": 0,
@@ -51,8 +51,8 @@
     },
     {
       "profile": "failopen-wrapper",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": 0,
       "net": 0,
@@ -63,8 +63,8 @@
     },
     {
       "profile": "bwrap-loose",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": null,
       "net": null,
@@ -75,8 +75,8 @@
     },
     {
       "profile": "bwrap-strict",
-      "date": "2026-10-26T08:36:14+0000",
-      "host": "linux 6.17.0-1022-azure",
+      "date": "2026-11-02T10:37:00+0000",
+      "host": "linux 7.0.0-1017-azure",
       "corpus_version": "0.3.0",
       "overall": null,
       "net": null,
